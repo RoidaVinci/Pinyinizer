@@ -5,11 +5,13 @@ import { translateMock } from "./providers/mock.js";
 import { translateHTTP } from "./providers/http.js";
 import { translateGoogleFree } from "./providers/google_free.js";  // ← NEW
 import { translateNLLB } from "./providers/nllb.js";
+import { translatePinyin } from "./providers/pinyin.js";   // ← NEW
 
-const PROVIDERS = { mock: translateMock, 
+const PROVIDERS = { mock: translateMock,
     http: translateHTTP,
     google_free: translateGoogleFree ,
     nllb: translateNLLB,
+    pinyin: translatePinyin ,
 };
 
 
@@ -18,16 +20,19 @@ export async function translateBatch(texts, opts) {
     provider = "mock",
     targetLang = "es",
     sourceLang = "auto",
+    targetMode = "translate",   // "translate" | "pinyin"
     context,
     glossary,
     cacheSalt = 1,           // bump to invalidate cache globally
   } = opts || {};
 
-  const p = PROVIDERS[provider] || translateMock;
+  const p = targetMode === "pinyin"
+    ? translatePinyin
+    : (PROVIDERS[provider] || translateMock);
 
   // ---- provider-aware cache keys (fixes “stuck on old results”) ----
   const normalized = texts.map(s => s ?? "");
-  const keys = normalized.map(s => fastHash(`${cacheSalt}|${provider}|${sourceLang}|${targetLang}|${s}`));
+  const keys = normalized.map(s => fastHash(`${cacheSalt}|${provider}|${targetMode}|${sourceLang}|${targetLang}|${s}`));
   const cached = await getMany(keys);
 
   const misses = [];
@@ -35,7 +40,7 @@ export async function translateBatch(texts, opts) {
   normalized.forEach((s, i) => { if (cached[i] == null) { missIdx.push(i); misses.push(s); } });
   if (!misses.length) return cached;
 
-  const pre = applyGlossary(misses, glossary);
+  const pre = targetMode === "pinyin" ? misses : applyGlossary(misses, glossary);
 
   let translatedMisses = [];
   try {
@@ -47,7 +52,9 @@ export async function translateBatch(texts, opts) {
     translatedMisses = misses.slice();
   }
 
-  translatedMisses = translatedMisses.map(unmaskDNT);
+  translatedMisses = targetMode === "pinyin"
+    ? translatedMisses
+    : translatedMisses.map(unmaskDNT);
 
   const write = [];
   translatedMisses.forEach((t, j) => {
