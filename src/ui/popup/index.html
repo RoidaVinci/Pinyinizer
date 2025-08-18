@@ -6,24 +6,27 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main>
-    <h1>Clean Translate</h1>
-    <label>
-      <span>Enabled</span>
-      <input id="enabled" type="checkbox" />
-    </label>
-    <label>
-    <span>Source</span>
-    <input id="sourceLang" placeholder="auto or zh" />
-    </label>
-
-    <label>
-      <span>Target</span>
-      <input id="targetLang" placeholder="es" />
-    </label>
-    <button id="apply">Apply</button>
-    <a href="../options/index.html" target="_blank">Options…</a>
-  </main>
+    <main>
+      <label>
+        <span>Enabled</span>
+        <input id="enabled" type="checkbox" />
+      </label>
+      <label>
+        <span>Source</span>
+        <input id="sourceLang" placeholder="auto or zh" />
+      </label>
+      <label>
+        <span>Target order</span>
+        <input id="targetLangs" placeholder="es, en" />
+      </label>
+      <label>
+        <span>Exclude</span>
+        <input id="excludeLangs" placeholder="en, es" />
+      </label>
+      <button id="apply">Apply</button>
+      <button id="undo">Undo</button>
+      <a href="../options/index.html" target="_blank">Options…</a>
+    </main>
   <script src="index.js"></script>
 </body>
 </html>
