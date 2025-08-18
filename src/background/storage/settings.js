@@ -1,6 +1,7 @@
 const DEFAULTS = {
   enabled: true,
   provider: "http",      // "mock" | "http"
+  targetMode: "translate", // "translate" | "pinyin"
   sourceLang: "auto",
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],

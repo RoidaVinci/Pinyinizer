@@ -90,6 +90,7 @@ async function translateNodes(nodes) {
     const resp = await translateRequest(unique, {
       sourceLang: currentLangs.source,
       targetLang: currentLangs.target,
+      targetMode: currentSettings.targetMode,
       context: { url: location.href },
     });
     if (Array.isArray(resp)) translations = resp;
@@ -99,7 +100,8 @@ async function translateNodes(nodes) {
 
   const expanded = new Array(nodes.length);
   translations.forEach((tr, j) => {
-    for (const idx of map.get(unique[j])) expanded[idx] = tr;
+    const str = (tr && typeof tr === "object") ? (tr.pinyin || tr.characters || "") : tr;
+    for (const idx of map.get(unique[j])) expanded[idx] = str;
   });
   applyTranslations(nodes, expanded);
     console.log(`[CT] translated ${nodes.length} nodes`);
