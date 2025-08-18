@@ -1,11 +1,10 @@
 import { getPinyinMany, setPinyinMany } from "./storage/cache.js";
+import { convertToPinyin } from "./pinyinConverter.js";
 
-// Very small placeholder converter. In real usage this should be
-// replaced by a proper library or API that converts Chinese text to
-// Pinyin. For now we simply return the input string so the caching and
-// messaging infrastructure can be exercised without external deps.
+// Convert a single string to Pinyin using the converter library.
+// The converter handles unknown characters by returning them unchanged.
 function toPinyin(str = "") {
-  return str;
+  return convertToPinyin(str);
 }
 
 export async function pinyinBatch(texts = []) {
