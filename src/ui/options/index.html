@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<main>
+  <main>
     <h1>Clean Translate — Options</h1>
 
     <fieldset>
@@ -15,11 +15,21 @@
       <label><input type="radio" name="mode" value="pinyin" id="modePinyin" /> Pinyin (Hanzi → Hanzi + pinyin)</label>
     </fieldset>
 
+    <!-- Pinyin-only options -->
+    <section id="pinyinSection">
+      <h2>Pinyin options</h2>
+      <label>
+        <span>Also show English (keep English in parentheses after Hanzi)</span>
+        <input id="annotateShowEnglish" type="checkbox" />
+      </label>
+    </section>
 
-    <label>
-      <span>Enabled</span>
-      <input id="enabled" type="checkbox" />
-    </label>
+    <!-- Translate-only options -->
+    <section id="translateSection">
+      <label>
+        <span>Enabled</span>
+        <input id="enabled" type="checkbox" />
+      </label>
 
       <label>
         <span>Target languages</span>
@@ -34,23 +44,23 @@
         <input id="excludeLangs" placeholder="en, es" />
       </label>
 
-
-    <label>
-      <span>Provider</span>
-      <select id="provider">
-        <option value="mock">Mock (dev)</option>
-        <option value="http">HTTP API</option>
-        <option value="google_free">Google (free, no key)</option> <!-- NEW -->
-        <option value="nllb">NLLB (offline, safe)</option> <!-- NEW -->
-      </select>
-    </label>
-
-    <section>
-      <h2>Glossary</h2>
       <label>
-        <span>Do Not Translate (comma separated)</span>
-        <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
+        <span>Provider</span>
+        <select id="provider">
+          <option value="mock">Mock (dev)</option>
+          <option value="http">HTTP API</option>
+          <option value="google_free">Google (free, no key)</option>
+          <option value="nllb">NLLB (offline, safe)</option>
+        </select>
       </label>
+
+      <section>
+        <h2>Glossary</h2>
+        <label>
+          <span>Do Not Translate (comma separated)</span>
+          <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
+        </label>
+      </section>
     </section>
 
     <div class="actions">

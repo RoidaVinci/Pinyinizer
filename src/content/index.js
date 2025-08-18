@@ -1,4 +1,5 @@
 // --- Clean Translate: single-file content script (no imports) ---
+// --- Clean Translate: single-file content script (no imports) ---
 
 const HAN_RE = /\p{Script=Han}+/gu;
 
@@ -24,19 +25,13 @@ let disconnectMo;
       : await translateTree(document.body);
     if (active) disconnectMo = startMutationObserver(handleMutations);
 
-    // Re-run on route changes
     addEventListener("popstate", () => {
-      currentSettings?.mode === "pinyin"
-        ? annotateTree(document.body)
-        : translateTree(document.body);
+      currentSettings?.mode === "pinyin" ? annotateTree(document.body) : translateTree(document.body);
     });
     addEventListener("hashchange", () => {
-      currentSettings?.mode === "pinyin"
-        ? annotateTree(document.body)
-        : translateTree(document.body);
+      currentSettings?.mode === "pinyin" ? annotateTree(document.body) : translateTree(document.body);
     });
 
-    // Messages from popup
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg?.type === "CT_APPLY_NOW") {
         (async () => {
@@ -116,7 +111,7 @@ async function translateNodes(nodes) {
   texts.forEach((t, i) => { if (!map.has(t)) map.set(t, []); map.get(t).push(i); });
   const unique = Array.from(map.keys());
 
-  let translations = unique;           // fallback = identity
+  let translations = unique;
   try {
     const resp = await translateRequest(unique, {
       sourceLang: currentLangs.source,
@@ -137,7 +132,6 @@ async function translateNodes(nodes) {
 }
 
 async function annotateNodes(nodes) {
-  // 1) Find all Hanzi runs across nodes
   const nodeRuns = [];
   const allRuns = [];
   nodes.forEach((n, i) => {
@@ -151,24 +145,27 @@ async function annotateNodes(nodes) {
   });
   if (!allRuns.length) return;
 
-  // 2) Deduplicate runs
-  const map = new Map();
-  allRuns.forEach((s) => { if (!map.has(s)) map.set(s, []); });
-  const unique = Array.from(map.keys());
+  // Dedup runs
+  const unique = Array.from(new Set(allRuns));
 
-  // 3) Request pinyin
-  let pin = unique;
+  // 1) Pinyin for each unique run
+  let pyArr = unique.slice();
   try {
     const resp = await sendMessageSafe({ type: "CT_ANNOTATE_BATCH", payload: { texts: unique } });
-    const pinyins = resp?.pinyins;
-    if (Array.isArray(pinyins)) pin = pinyins;
+    if (Array.isArray(resp?.pinyins)) pyArr = resp.pinyins;
   } catch (e) {
     console.warn("[CT] annotateRequest failed; using originals", e);
   }
-  unique.forEach((u, i) => map.set(u, pin[i] || u));
+  const pyMap = new Map(unique.map((u, i) => [u, pyArr[i] || u]));
 
-  // 4) Build output: replace Han run, and if there is an ASCII/full-width parenthesis
-  //    immediately after (likely an English gloss), consume it and replace with pinyin.
+  // 2) Optional English (provider fallback, only keep Latin-without-Han)
+  const showEnglish = !!(currentSettings?.annotate && currentSettings.annotate.showEnglish);
+  let enMap = null;
+  if (showEnglish) {
+    enMap = await fetchEnglishMap(unique);
+  }
+
+  // 3) Rebuild output, remove any immediate English next to Hanzi, then insert ours
   const out = nodes.map((n, i) => {
     const txt = n.nodeValue || "";
     const runs = nodeRuns[i];
@@ -179,11 +176,20 @@ async function annotateNodes(nodes) {
     for (const r of runs) {
       if (r.start > cursor) acc += txt.slice(cursor, r.start);
 
-      // Consume any immediately-following ASCII/full-width parenthesis that looks English.
-      const consumed = consumeAsciiParenSuffix(txt, r.end);
+      // Always remove page-inserted English right after the Han run (paren or plain latin),
+      // because if showEnglish is ON we will add our own, and if OFF we want it gone.
+      let consumed = consumeAsciiParenSuffix(txt, r.end);
+      if (!consumed) consumed = consumePlainLatinSuffix(txt, r.end);
 
-      const py = map.get(r.han) || r.han;
-      acc += `${r.han} (${py})`;
+      const py = pyMap.get(r.han) || r.han;
+
+      if (showEnglish && enMap) {
+        const engRaw = enMap.get(r.han) || "";
+        const eng = isLatinNoHan(engRaw) ? engRaw : "";
+        acc += `${r.han} (${py}${eng ? " " + eng : ""})`;
+      } else {
+        acc += `${r.han} (${py})`;
+      }
 
       cursor = r.end + consumed;
     }
@@ -192,35 +198,146 @@ async function annotateNodes(nodes) {
   });
 
   applyTranslations(nodes, out);
-  console.log(`[CT] annotated ${nodes.length} nodes (pinyin mode)`);
+
+  // Clean tiny latin-only siblings the site might add (keeps DOM tidy)
+  for (const n of nodes) stripFollowingLatinSiblings(n, { maxNodes: 2, maxChars: 140 });
+
+  console.log(`[CT] annotated ${nodes.length} nodes (pinyin mode${showEnglish ? " + english" : ""})`);
 }
+
+
 
 /**
  * If right after `pos` there is a parenthesis group like:
- *   " (English …)" or "（English …）"
- * and it looks Latin (no Hanzi), return its full length so we can skip it.
- * Otherwise return 0.
+ * " (English …)" or "（English …）" and it looks Latin (no Hanzi),
+ * return its full length so we can skip it; else return 0.
  */
+function isLatinNoHan(s) {
+  return !!s && /[A-Za-z]/.test(s) && !/\p{Script=Han}/u.test(s);
+}
+
+async function fetchEnglishMap(unique) {
+  // Try Google (fast, reliable); if any entries come back non-Latin, retry those via HTTP.
+  const first = await requestEnglish(unique, "google_free");
+  const out = new Map();
+
+  const retryIdx = [];
+  const retryArr = [];
+  unique.forEach((u, i) => {
+    const v = first[i] ?? "";
+    if (isLatinNoHan(v)) {
+      out.set(u, v);
+    } else {
+      retryIdx.push(i);
+      retryArr.push(u);
+    }
+  });
+
+  if (retryArr.length) {
+    try {
+      const second = await requestEnglish(retryArr, "http");
+      retryIdx.forEach((origIdx, j) => {
+        const v = second[j] ?? "";
+        out.set(unique[origIdx], isLatinNoHan(v) ? v : "");
+      });
+    } catch {
+      retryIdx.forEach((origIdx) => out.set(unique[origIdx], ""));
+    }
+  }
+
+  return out;
+}
+
+async function requestEnglish(arr, provider) {
+  const resp = await sendMessageSafe({
+    type: "CT_TRANSLATE_BATCH",
+    payload: {
+      texts: arr,
+      opts: {
+        sourceLang: "zh",
+        targetLang: "en",
+        provider,
+        allowInPinyin: true,
+        context: { url: location.href }
+      }
+    }
+  });
+  return Array.isArray(resp?.translations) ? resp.translations : arr;
+}
+
 function consumeAsciiParenSuffix(full, pos) {
   const slice = full.slice(pos);
-
-  // ASCII () or full-width （）
   const m = /^[\s]*([\(\uFF08])([^)\uFF09]{0,120})([\)\uFF09])/.exec(slice);
   if (!m) return 0;
-
   const inside = m[2].trim();
   if (!inside) return 0;
-
   const hasHan = /\p{Script=Han}/u.test(inside);
   const hasLatin = /[A-Za-z]/.test(inside);
-
-  // Heuristic: if it contains Latin letters and no Hanzi, treat it as an English gloss to be replaced.
   if (hasLatin && !hasHan) return m[0].length;
-
   return 0;
 }
 
+/**
+ * If right after `pos` there is a short plain Latin snippet (no Hanzi) like " English words"
+ * (possibly starting with dash, colon or whitespace), consume it.
+ */
+function consumePlainLatinSuffix(full, pos) {
+  const slice = full.slice(pos);
+  const m = /^[\s]*[-–—:·：]?\s*([A-Za-z][A-Za-z0-9\s'’\-,.:;\/]{0,160})/.exec(slice);
+  if (!m) return 0;
+  const chunk = (m[0] || "").trim();
+  if (!chunk) return 0;
+  if (/\p{Script=Han}/u.test(chunk)) return 0; // contains Hanzi → do not consume
+  // Heuristic: ensure it has at least one letter to avoid eating punctuation-only
+  if (!/[A-Za-z]/.test(chunk)) return 0;
+  return m[0].length;
+}
+
+/**
+ * Remove tiny *sibling* text nodes that are Latin-only and immediately follow a node we modified.
+ * This catches cases where the site renders English in a separate text node.
+ */
+function stripFollowingLatinSiblings(textNode, { maxNodes = 2, maxChars = 140 } = {}) {
+  let sib = textNode.nextSibling;
+  let count = 0;
+  while (sib && count < maxNodes) {
+    if (sib.nodeType === Node.TEXT_NODE) {
+      const s = (sib.nodeValue || "").trim();
+      if (s && s.length <= maxChars && /[A-Za-z]/.test(s) && !/\p{Script=Han}/u.test(s)) {
+        // Remove the English sibling because we've already inserted "(English pinyin)"
+        try { sib.nodeValue = ""; } catch {}
+      } else {
+        break; // next content is not just Latin text → stop
+      }
+      count++;
+      sib = sib.nextSibling;
+      continue;
+    }
+    if (sib.nodeType === Node.ELEMENT_NODE) {
+      // Stop if the sibling element clearly has more than just tiny Latin text
+      const text = (sib.textContent || "").trim();
+      if (text && text.length <= maxChars && /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text)) {
+        // Be conservative: only clear *pure text* elements (no children) to avoid layout breakage
+        if (!sib.firstElementChild) {
+          try { sib.textContent = ""; } catch {}
+          count++;
+          sib = sib.nextSibling;
+          continue;
+        }
+      }
+      break;
+    }
+    sib = sib.nextSibling;
+  }
+}
+
 // ---- DOM helpers ----
+function isLatinNoHan(s) {
+  if (!s) return false;
+  return /[A-Za-z]/.test(s) && !/\p{Script=Han}/u.test(s);
+}
+
+
 function shouldSkipTextNode(node) {
   if (!node || node.nodeType !== Node.TEXT_NODE) return true;
   if (TOUCHED.has(node)) return true;
@@ -256,15 +373,13 @@ function applyTranslations(nodes, translations) {
       if (!ORIGINALS.has(n)) ORIGINALS.set(n, n.nodeValue);
       n.nodeValue = translations[i];
       TOUCHED.add(n);
-    } catch (e) {
-      // ignore
-    }
+    } catch {}
   });
 }
 
 function revertTranslations() {
   ORIGINALS.forEach((txt, node) => {
-    try { node.nodeValue = txt; } catch (e) {}
+    try { node.nodeValue = txt; } catch {}
   });
   ORIGINALS.clear();
   TOUCHED = new WeakSet();

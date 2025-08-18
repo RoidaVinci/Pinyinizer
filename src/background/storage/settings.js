@@ -6,14 +6,15 @@ const DEFAULTS = {
   excludeLangs: ["en", "es"],
   batchSize: 200,
   mode: "translate",     // "translate" | "pinyin"
-  annotate: {},          // (reserved; no options for now)
+  annotate: {
+    showEnglish: false   // when in pinyin mode: keep existing English glosses right after Hanzi
+  },
   glossary: {
     dnt: ["Chrome", "API"],
     replace: []         // [["colour","color"]] etc.
   },
   perSite: {}           // domain -> overrides
 };
-
 
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");

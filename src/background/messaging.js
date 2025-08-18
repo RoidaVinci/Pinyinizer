@@ -5,13 +5,13 @@ import { annotateBatch } from "./annotator/index.js";
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
 
-    // --- Translate requests (guarded by mode) ---
+    // --- Translate requests (guarded by mode, with override) ---
     if (msg?.type === "CT_TRANSLATE_BATCH") {
       const settings = await getSettings();
       const { texts = [], opts = {} } = msg.payload || {};
 
-      // SAFETY SWITCH: if we’re in pinyin mode, do not translate.
-      if (settings.mode === "pinyin") {
+      // Block translations in pinyin mode UNLESS the caller explicitly allows it.
+      if (settings.mode === "pinyin" && !opts?.allowInPinyin) {
         sendResponse({ translations: texts });
         return;
       }
@@ -49,7 +49,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // --- Settings write ---
     if (msg?.type === "CT_SET_SETTINGS") {
       await setSettings(msg.payload || {});
-      // Optional: show a small badge when in pinyin mode to help debugging.
       try {
         const s = await getSettings();
         chrome.action.setBadgeText({ text: s.mode === "pinyin" ? "PY" : "" });
@@ -58,7 +57,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
-    // --- Clear translation cache (does not affect pinyin cache, which reuses same storage with namespacing) ---
+    // --- Clear translation cache ---
     if (msg?.type === "CT_CLEAR_CACHE") {
       await clearTranslationCache();
       sendResponse({ ok: true });
@@ -66,6 +65,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
   })();
-  return true; // keep the message channel open for async responses
+  return true;
 });
-

@@ -6,12 +6,23 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <main>
+  <main>
     <fieldset>
       <legend>Mode</legend>
       <label><input type="radio" name="mode" value="translate" id="modeTranslate" /> Translate</label>
       <label><input type="radio" name="mode" value="pinyin" id="modePinyin" /> Pinyin</label>
     </fieldset>
+
+    <!-- Pinyin-only -->
+    <section id="pinyinSection">
+      <label>
+        <span>Also show English</span>
+        <input id="annotateShowEnglish" type="checkbox" />
+      </label>
+    </section>
+
+    <!-- Translate-only -->
+    <section id="translateSection">
       <label>
         <span>Enabled</span>
         <input id="enabled" type="checkbox" />
@@ -28,10 +39,12 @@
         <span>Exclude</span>
         <input id="excludeLangs" placeholder="en, es" />
       </label>
-      <button id="apply">Apply</button>
-      <button id="undo">Undo</button>
-      <a href="../options/index.html" target="_blank">Options…</a>
-    </main>
+    </section>
+
+    <button id="apply">Apply</button>
+    <button id="undo">Undo</button>
+    <a href="../options/index.html" target="_blank">Options…</a>
+  </main>
   <script src="index.js"></script>
 </body>
 </html>
