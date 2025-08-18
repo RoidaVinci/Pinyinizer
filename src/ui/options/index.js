@@ -1,24 +1,27 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
-  const targetLang = document.querySelector("#targetLang");
-  const sourceLang = document.querySelector("#sourceLang"); // ← NEW
+    const targetLangs = document.querySelector("#targetLangs");
+    const sourceLang = document.querySelector("#sourceLang"); // ← NEW
+    const excludeLangs = document.querySelector("#excludeLangs");
   const provider = document.querySelector("#provider");
   const glossaryDnt = document.querySelector("#glossaryDnt");
   const status = document.querySelector("#status");
 
   const settings = await send("CT_GET_SETTINGS");
-  enabled.checked = !!settings.enabled;
-  targetLang.value = settings.targetLang || "en";
-  sourceLang.value = settings.sourceLang || "auto";           // ← NEW
+    enabled.checked = !!settings.enabled;
+    targetLangs.value = (settings.targetLangs || ["es", "en"]).join(", ");
+    sourceLang.value = settings.sourceLang || "auto";           // ← NEW
+    excludeLangs.value = (settings.excludeLangs || ["en", "es"]).join(", ");
   provider.value = settings.provider || "http";
   glossaryDnt.value = (settings.glossary?.dnt || []).join(", ");
 
   document.querySelector("#save").addEventListener("click", async () => {
     const payload = {
-      enabled: enabled.checked,
-      targetLang: (targetLang.value || "en").trim(),
-      sourceLang: (sourceLang.value || "auto").trim(),        // ← NEW
-      provider: provider.value,
+        enabled: enabled.checked,
+        targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
+        sourceLang: (sourceLang.value || "auto").trim(),        // ← NEW
+        excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean),
+        provider: provider.value,
       glossary: {
         ...(settings.glossary || {}),
         dnt: glossaryDnt.value.split(",").map(s => s.trim()).filter(Boolean)

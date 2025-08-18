@@ -4,5 +4,5 @@ Load in Chrome: **chrome://extensions → Developer mode → Load unpacked** and
 
 - Content script replaces **text nodes in-place** for fidelity.
 - Background service worker handles **translation providers**, **caching**, and **settings**.
-- Options page lets you set target language, provider, per-site rules, glossary.
+- Popup and options let you set target language order, excluded languages, provider, per-site rules, glossary, and undo translations instantly.
 
