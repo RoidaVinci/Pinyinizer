@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Clean Translate — Options</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main>
+    <h1>Clean Translate — Options</h1>
+
+    <label>
+      <span>Enabled</span>
+      <input id="enabled" type="checkbox" />
+    </label>
+
+    <label>
+      <span>Target language</span>
+      <input id="targetLang" placeholder="e.g., es, fr, de" />
+    </label>
+    <!-- inside <main> under Target language -->
+    <label>
+    <span>Source language</span>
+    <input id="sourceLang" placeholder="auto (or zh, en, ...)" />
+    </label>
+
+
+    <label>
+      <span>Provider</span>
+      <select id="provider">
+        <option value="mock">Mock (dev)</option>
+        <option value="http">HTTP API</option>
+        <option value="google_free">Google (free, no key)</option> <!-- NEW -->
+
+      </select>
+    </label>
+
+    <section>
+      <h2>Glossary</h2>
+      <label>
+        <span>Do Not Translate (comma separated)</span>
+        <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
+      </label>
+    </section>
+
+    <div class="actions">
+      <button id="save">Save</button>
+      <span id="status"></span>
+    </div>
+  </main>
+  <script src="index.js"></script>
+</body>
+</html>
