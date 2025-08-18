@@ -17,7 +17,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
       if (msg?.type === "CT_PINYIN_BATCH") {
+        const settings = await getSettings();
         const { texts = [] } = msg.payload || {};
+        if (!settings.pinyin) {
+          sendResponse({ pinyin: texts });
+          return;
+        }
         try {
           const pinyin = await pinyinBatch(texts);
           sendResponse({ pinyin });

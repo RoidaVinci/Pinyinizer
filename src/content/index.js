@@ -101,16 +101,18 @@ async function translateNodes(nodes) {
   }
 
   let pinyins = [];
-  try {
-    const respPy = await pinyinRequest(unique);
-    if (Array.isArray(respPy)) pinyins = respPy;
-  } catch (e) {
-    console.warn("[CT] pinyinRequest failed; using originals", e);
-  }
+  if (currentSettings.pinyin) {
+    try {
+      const respPy = await pinyinRequest(unique);
+      if (Array.isArray(respPy)) pinyins = respPy;
+    } catch (e) {
+      console.warn("[CT] pinyinRequest failed; using originals", e);
+    }
 
-  pinyins.forEach((py, j) => {
-    for (const idx of map.get(unique[j])) PINYINS.set(nodes[idx], py);
-  });
+    pinyins.forEach((py, j) => {
+      for (const idx of map.get(unique[j])) PINYINS.set(nodes[idx], py);
+    });
+  }
 
   const expanded = new Array(nodes.length);
   translations.forEach((tr, j) => {
