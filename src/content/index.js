@@ -6,6 +6,7 @@ const EXCLUDE_SELECTOR =
   "pre, code, textarea, input, select, option, [contenteditable]";
 let TOUCHED = new WeakSet(); // track translated text nodes to avoid loops
 const ORIGINALS = new Map();
+const PINYINS = new Map();
 let currentSettings;
 let currentLangs = { source: "auto", target: "es" };
 let disconnectMo;
@@ -97,12 +98,24 @@ async function translateNodes(nodes) {
     console.warn("[CT] translateRequest failed; using originals", e);
   }
 
+  let pinyins = [];
+  try {
+    const respPy = await pinyinRequest(unique);
+    if (Array.isArray(respPy)) pinyins = respPy;
+  } catch (e) {
+    console.warn("[CT] pinyinRequest failed; using originals", e);
+  }
+
+  pinyins.forEach((py, j) => {
+    for (const idx of map.get(unique[j])) PINYINS.set(nodes[idx], py);
+  });
+
   const expanded = new Array(nodes.length);
   translations.forEach((tr, j) => {
     for (const idx of map.get(unique[j])) expanded[idx] = tr;
   });
   applyTranslations(nodes, expanded);
-    console.log(`[CT] translated ${nodes.length} nodes`);
+  console.log(`[CT] translated ${nodes.length} nodes`);
 
 }
 
@@ -189,6 +202,11 @@ function startMutationObserver(onTextNodes) {
 function translateRequest(texts, opts = {}) {
   return sendMessageSafe({ type: "CT_TRANSLATE_BATCH", payload: { texts, opts } })
     .then(resp => (resp && resp.translations) ? resp.translations : texts);
+}
+
+function pinyinRequest(texts) {
+  return sendMessageSafe({ type: "CT_PINYIN_BATCH", payload: { texts } })
+    .then(resp => (resp && resp.pinyin) ? resp.pinyin : texts);
 }
 
 function getSettings() {

@@ -1,4 +1,5 @@
 import { translateBatch, clearTranslationCache } from "./translator/index.js";
+import { pinyinBatch } from "./pinyin.js";
 import { getSettings, setSettings } from "./storage/settings.js";
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -12,6 +13,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch (e) {
           console.error("[CT:bg] TRANSLATE failed:", e);
           sendResponse({ translations: texts });
+        }
+        return;
+      }
+      if (msg?.type === "CT_PINYIN_BATCH") {
+        const { texts = [] } = msg.payload || {};
+        try {
+          const pinyin = await pinyinBatch(texts);
+          sendResponse({ pinyin });
+        } catch (e) {
+          console.error("[CT:bg] PINYIN failed:", e);
+          sendResponse({ pinyin: texts });
         }
         return;
       }

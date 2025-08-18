@@ -5,6 +5,14 @@ export function translateRequest(texts, context = {}) {
     });
   });
 }
+
+export function pinyinRequest(texts) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "CT_PINYIN_BATCH", payload: { texts } }, (resp) => {
+      resolve(resp?.pinyin || texts);
+    });
+  });
+}
 export function getSettings() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: "CT_GET_SETTINGS" }, resolve);
