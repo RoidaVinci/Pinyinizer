@@ -2,7 +2,8 @@ const DEFAULTS = {
   enabled: true,
   provider: "http",      // "mock" | "http"
   sourceLang: "auto",
-  targetLang: "es",
+  targetLangs: ["es", "en"],
+  excludeLangs: ["en", "es"],
   batchSize: 200,
   glossary: {
     dnt: ["Chrome", "API"],

@@ -4,47 +4,78 @@
 const EXCLUDE_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT"]);
 const EXCLUDE_SELECTOR =
   "pre, code, textarea, input, select, option, [contenteditable]";
-const TOUCHED = new WeakSet(); // track translated text nodes to avoid loops
+let TOUCHED = new WeakSet(); // track translated text nodes to avoid loops
+const ORIGINALS = new Map();
+let currentSettings;
+let currentLangs = { source: "auto", target: "es" };
+let disconnectMo;
 
 // Entry
 (async function main() {
   try {
     console.log("[CT] content loaded");
-    const settings = await getSettings();
-    if (!settings?.enabled) return;
+    currentSettings = await getSettings();
+    if (!currentSettings?.enabled) return;
 
-    // Initial translate
-    await translateTree(document.body);
-
-    // Watch dynamic changes (SPAs, infinite scroll)
-    startMutationObserver(async (nodes) => {
-      const filtered = nodes.filter((n) => !shouldSkipTextNode(n));
-      if (!filtered.length) return;
-      await translateNodes(filtered);
-    });
+    const active = await translateTree(document.body);
+    if (active) disconnectMo = startMutationObserver(handleMutations);
 
     // Re-run on route changes
     addEventListener("popstate", () => translateTree(document.body));
     addEventListener("hashchange", () => translateTree(document.body));
 
-    // Popup “Apply” -> re-run
+    // Messages from popup
     chrome.runtime.onMessage.addListener((msg) => {
-      if (msg?.type === "CT_APPLY_NOW") translateTree(document.body);
+      if (msg?.type === "CT_APPLY_NOW") {
+        (async () => {
+          currentSettings = await getSettings();
+          revertTranslations();
+          disconnectMo?.();
+          const again = await translateTree(document.body);
+          if (again) disconnectMo = startMutationObserver(handleMutations);
+        })();
+      }
+      if (msg?.type === "CT_UNDO") {
+        revertTranslations();
+        disconnectMo?.();
+        disconnectMo = null;
+      }
     });
   } catch (err) {
     console.error("[CT] init error", err);
   }
 })();
 
+async function handleMutations(nodes) {
+  const filtered = nodes.filter((n) => !shouldSkipTextNode(n));
+  if (!filtered.length) return;
+  await translateNodes(filtered);
+}
+
 // ---- core functions ----
 async function translateTree(root) {
   try {
-    if (!root) return;
+    if (!root) return false;
+    const sample = document.body?.innerText?.slice(0, 12000) || "";
+    let pageLang = "und";
+    try {
+      const det = await chrome.i18n.detectLanguage(sample);
+      pageLang = det?.languages?.[0]?.language || "und";
+    } catch (e) {}
+    if (currentSettings.excludeLangs?.includes(pageLang)) return false;
+    const order = currentSettings.targetLangs || ["es", "en"];
+    const target = order.find(l => l !== pageLang) || order[0] || "es";
+    const source = currentSettings.sourceLang && currentSettings.sourceLang !== "auto"
+      ? currentSettings.sourceLang
+      : pageLang;
+    currentLangs = { source, target };
     const nodes = collectTextNodes(root);
-    if (!nodes.length) return;
+    if (!nodes.length) return false;
     await translateNodes(nodes);
+    return true;
   } catch (e) {
     console.error("[CT] translateTree error", e);
+    return false;
   }
 }
 
@@ -56,7 +87,11 @@ async function translateNodes(nodes) {
 
   let translations = unique;           // fallback = identity
   try {
-    const resp = await translateRequest(unique, { url: location.href });
+    const resp = await translateRequest(unique, {
+      sourceLang: currentLangs.source,
+      targetLang: currentLangs.target,
+      context: { url: location.href },
+    });
     if (Array.isArray(resp)) translations = resp;
   } catch (e) {
     console.warn("[CT] translateRequest failed; using originals", e);
@@ -105,12 +140,21 @@ function applyTranslations(nodes, translations) {
   nodes.forEach((n, i) => {
     try {
       if (!n) return;
+      if (!ORIGINALS.has(n)) ORIGINALS.set(n, n.nodeValue);
       n.nodeValue = translations[i];
       TOUCHED.add(n); // mark this specific text node as translated
     } catch (e) {
       // ignore individual node failures
     }
   });
+}
+
+function revertTranslations() {
+  ORIGINALS.forEach((txt, node) => {
+    try { node.nodeValue = txt; } catch (e) {}
+  });
+  ORIGINALS.clear();
+  TOUCHED = new WeakSet();
 }
 
 function startMutationObserver(onTextNodes) {
@@ -142,8 +186,8 @@ function startMutationObserver(onTextNodes) {
 
 // ---- messaging (robust; handles extension reloads) ----
 // ---- messaging (robust; handles extension reloads + sleepy SW) ----
-function translateRequest(texts, context = {}) {
-  return sendMessageSafe({ type: "CT_TRANSLATE_BATCH", payload: { texts, context } })
+function translateRequest(texts, opts = {}) {
+  return sendMessageSafe({ type: "CT_TRANSLATE_BATCH", payload: { texts, opts } })
     .then(resp => (resp && resp.translations) ? resp.translations : texts);
 }
 
