@@ -1,27 +1,31 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
-    const targetLangs = document.querySelector("#targetLangs");
-    const sourceLang = document.querySelector("#sourceLang"); // ← NEW
-    const excludeLangs = document.querySelector("#excludeLangs");
+  const modeTranslate = document.querySelector("#modeTranslate");
+  const modePinyin = document.querySelector("#modePinyin");
+  const targetLangs = document.querySelector("#targetLangs");
+  const sourceLang = document.querySelector("#sourceLang");
+  const excludeLangs = document.querySelector("#excludeLangs");
   const provider = document.querySelector("#provider");
   const glossaryDnt = document.querySelector("#glossaryDnt");
   const status = document.querySelector("#status");
 
   const settings = await send("CT_GET_SETTINGS");
-    enabled.checked = !!settings.enabled;
-    targetLangs.value = (settings.targetLangs || ["es", "en"]).join(", ");
-    sourceLang.value = settings.sourceLang || "auto";           // ← NEW
-    excludeLangs.value = (settings.excludeLangs || ["en", "es"]).join(", ");
+  enabled.checked = !!settings.enabled;
+  (settings.mode === "pinyin" ? modePinyin : modeTranslate).checked = true;
+  targetLangs.value = (settings.targetLangs || ["es", "en"]).join(", ");
+  sourceLang.value = settings.sourceLang || "auto";
+  excludeLangs.value = (settings.excludeLangs || ["en", "es"]).join(", ");
   provider.value = settings.provider || "http";
   glossaryDnt.value = (settings.glossary?.dnt || []).join(", ");
 
   document.querySelector("#save").addEventListener("click", async () => {
     const payload = {
-        enabled: enabled.checked,
-        targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
-        sourceLang: (sourceLang.value || "auto").trim(),        // ← NEW
-        excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean),
-        provider: provider.value,
+      enabled: enabled.checked,
+      mode: modePinyin.checked ? "pinyin" : "translate",
+      targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
+      sourceLang: (sourceLang.value || "auto").trim(),
+      excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean),
+      provider: provider.value,
       glossary: {
         ...(settings.glossary || {}),
         dnt: glossaryDnt.value.split(",").map(s => s.trim()).filter(Boolean)
@@ -32,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setTimeout(() => status.textContent = "", 1000);
   });
 });
+
 
 function send(type, payload) {
   return new Promise((resolve) => chrome.runtime.sendMessage({ type, payload }, resolve));

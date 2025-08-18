@@ -5,12 +5,15 @@ const DEFAULTS = {
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],
   batchSize: 200,
+  mode: "translate",     // "translate" | "pinyin"
+  annotate: {},          // (reserved; no options for now)
   glossary: {
     dnt: ["Chrome", "API"],
     replace: []         // [["colour","color"]] etc.
   },
   perSite: {}           // domain -> overrides
 };
+
 
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");

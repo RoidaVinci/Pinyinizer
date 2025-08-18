@@ -1,5 +1,7 @@
 // --- Clean Translate: single-file content script (no imports) ---
 
+const HAN_RE = /\p{Script=Han}+/gu;
+
 // Config / filters
 const EXCLUDE_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT"]);
 const EXCLUDE_SELECTOR =
@@ -17,12 +19,22 @@ let disconnectMo;
     currentSettings = await getSettings();
     if (!currentSettings?.enabled) return;
 
-    const active = await translateTree(document.body);
+    const active = currentSettings.mode === "pinyin"
+      ? await annotateTree(document.body)
+      : await translateTree(document.body);
     if (active) disconnectMo = startMutationObserver(handleMutations);
 
     // Re-run on route changes
-    addEventListener("popstate", () => translateTree(document.body));
-    addEventListener("hashchange", () => translateTree(document.body));
+    addEventListener("popstate", () => {
+      currentSettings?.mode === "pinyin"
+        ? annotateTree(document.body)
+        : translateTree(document.body);
+    });
+    addEventListener("hashchange", () => {
+      currentSettings?.mode === "pinyin"
+        ? annotateTree(document.body)
+        : translateTree(document.body);
+    });
 
     // Messages from popup
     chrome.runtime.onMessage.addListener((msg) => {
@@ -31,7 +43,9 @@ let disconnectMo;
           currentSettings = await getSettings();
           revertTranslations();
           disconnectMo?.();
-          const again = await translateTree(document.body);
+          const again = currentSettings.mode === "pinyin"
+            ? await annotateTree(document.body)
+            : await translateTree(document.body);
           if (again) disconnectMo = startMutationObserver(handleMutations);
         })();
       }
@@ -49,7 +63,11 @@ let disconnectMo;
 async function handleMutations(nodes) {
   const filtered = nodes.filter((n) => !shouldSkipTextNode(n));
   if (!filtered.length) return;
-  await translateNodes(filtered);
+  if (currentSettings?.mode === "pinyin") {
+    await annotateNodes(filtered);
+  } else {
+    await translateNodes(filtered);
+  }
 }
 
 // ---- core functions ----
@@ -79,6 +97,19 @@ async function translateTree(root) {
   }
 }
 
+async function annotateTree(root) {
+  try {
+    if (!root) return false;
+    const nodes = collectTextNodes(root);
+    if (!nodes.length) return false;
+    await annotateNodes(nodes);
+    return true;
+  } catch (e) {
+    console.error("[CT] annotateTree error", e);
+    return false;
+  }
+}
+
 async function translateNodes(nodes) {
   const texts = nodes.map(n => n.nodeValue);
   const map = new Map();
@@ -102,10 +133,92 @@ async function translateNodes(nodes) {
     for (const idx of map.get(unique[j])) expanded[idx] = tr;
   });
   applyTranslations(nodes, expanded);
-    console.log(`[CT] translated ${nodes.length} nodes`);
-
+  console.log(`[CT] translated ${nodes.length} nodes`);
 }
 
+async function annotateNodes(nodes) {
+  // 1) Find all Hanzi runs across nodes
+  const nodeRuns = [];
+  const allRuns = [];
+  nodes.forEach((n, i) => {
+    const txt = n.nodeValue || "";
+    const runs = [];
+    for (const m of txt.matchAll(HAN_RE)) {
+      runs.push({ start: m.index, end: m.index + m[0].length, han: m[0] });
+      allRuns.push(m[0]);
+    }
+    nodeRuns[i] = runs;
+  });
+  if (!allRuns.length) return;
+
+  // 2) Deduplicate runs
+  const map = new Map();
+  allRuns.forEach((s) => { if (!map.has(s)) map.set(s, []); });
+  const unique = Array.from(map.keys());
+
+  // 3) Request pinyin
+  let pin = unique;
+  try {
+    const resp = await sendMessageSafe({ type: "CT_ANNOTATE_BATCH", payload: { texts: unique } });
+    const pinyins = resp?.pinyins;
+    if (Array.isArray(pinyins)) pin = pinyins;
+  } catch (e) {
+    console.warn("[CT] annotateRequest failed; using originals", e);
+  }
+  unique.forEach((u, i) => map.set(u, pin[i] || u));
+
+  // 4) Build output: replace Han run, and if there is an ASCII/full-width parenthesis
+  //    immediately after (likely an English gloss), consume it and replace with pinyin.
+  const out = nodes.map((n, i) => {
+    const txt = n.nodeValue || "";
+    const runs = nodeRuns[i];
+    if (!runs.length) return txt;
+
+    let acc = "";
+    let cursor = 0;
+    for (const r of runs) {
+      if (r.start > cursor) acc += txt.slice(cursor, r.start);
+
+      // Consume any immediately-following ASCII/full-width parenthesis that looks English.
+      const consumed = consumeAsciiParenSuffix(txt, r.end);
+
+      const py = map.get(r.han) || r.han;
+      acc += `${r.han} (${py})`;
+
+      cursor = r.end + consumed;
+    }
+    if (cursor < txt.length) acc += txt.slice(cursor);
+    return acc;
+  });
+
+  applyTranslations(nodes, out);
+  console.log(`[CT] annotated ${nodes.length} nodes (pinyin mode)`);
+}
+
+/**
+ * If right after `pos` there is a parenthesis group like:
+ *   " (English …)" or "（English …）"
+ * and it looks Latin (no Hanzi), return its full length so we can skip it.
+ * Otherwise return 0.
+ */
+function consumeAsciiParenSuffix(full, pos) {
+  const slice = full.slice(pos);
+
+  // ASCII () or full-width （）
+  const m = /^[\s]*([\(\uFF08])([^)\uFF09]{0,120})([\)\uFF09])/.exec(slice);
+  if (!m) return 0;
+
+  const inside = m[2].trim();
+  if (!inside) return 0;
+
+  const hasHan = /\p{Script=Han}/u.test(inside);
+  const hasLatin = /[A-Za-z]/.test(inside);
+
+  // Heuristic: if it contains Latin letters and no Hanzi, treat it as an English gloss to be replaced.
+  if (hasLatin && !hasHan) return m[0].length;
+
+  return 0;
+}
 
 // ---- DOM helpers ----
 function shouldSkipTextNode(node) {
@@ -142,9 +255,9 @@ function applyTranslations(nodes, translations) {
       if (!n) return;
       if (!ORIGINALS.has(n)) ORIGINALS.set(n, n.nodeValue);
       n.nodeValue = translations[i];
-      TOUCHED.add(n); // mark this specific text node as translated
+      TOUCHED.add(n);
     } catch (e) {
-      // ignore individual node failures
+      // ignore
     }
   });
 }
@@ -184,8 +297,7 @@ function startMutationObserver(onTextNodes) {
   return () => mo.disconnect();
 }
 
-// ---- messaging (robust; handles extension reloads) ----
-// ---- messaging (robust; handles extension reloads + sleepy SW) ----
+// ---- messaging ----
 function translateRequest(texts, opts = {}) {
   return sendMessageSafe({ type: "CT_TRANSLATE_BATCH", payload: { texts, opts } })
     .then(resp => (resp && resp.translations) ? resp.translations : texts);
@@ -196,10 +308,9 @@ function getSettings() {
     .then(resp => resp || { enabled: false });
 }
 
-// Generic safe send with small retry on "context invalidated" / "receiving end" errors
 function sendMessageSafe(msg, retries = 3, delayMs = 200) {
   return new Promise((resolve) => {
-    if (!chrome.runtime || !chrome.runtime.id) return resolve(null); // extension reloaded/unavailable
+    if (!chrome.runtime || !chrome.runtime.id) return resolve(null);
     chrome.runtime.sendMessage(msg, (resp) => {
       const err = chrome.runtime.lastError;
       if (err) {
