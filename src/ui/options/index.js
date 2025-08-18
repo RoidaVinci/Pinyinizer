@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
   const pinyin = document.querySelector("#pinyin");
+  pinyin?.closest("label")?.querySelector("span").textContent = "Enable Pinyin overlay";
     const targetLangs = document.querySelector("#targetLangs");
     const sourceLang = document.querySelector("#sourceLang"); // ← NEW
     const excludeLangs = document.querySelector("#excludeLangs");
