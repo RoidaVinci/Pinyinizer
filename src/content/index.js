@@ -14,6 +14,7 @@ let disconnectMo;
 (async function main() {
   try {
     console.log("[CT] content loaded");
+    injectRubyStyles();
     currentSettings = await getSettings();
     if (!currentSettings?.enabled) return;
 
@@ -182,6 +183,23 @@ function startMutationObserver(onTextNodes) {
     characterData: true,
   });
   return () => mo.disconnect();
+}
+
+function injectRubyStyles() {
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    ruby {
+      line-height: 1.1;
+    }
+    ruby > rb {
+      font-size: 0.9em;
+    }
+    ruby > rt {
+      font-size: 0.6em;
+      line-height: 1;
+    }
+  `;
+  document.documentElement.appendChild(styleEl);
 }
 
 // ---- messaging (robust; handles extension reloads) ----
