@@ -115,6 +115,8 @@ function shouldSkipTextNode(node) {
   const el = node.parentElement;
   if (!el) return true;
   if (EXCLUDE_TAGS.has(el.tagName)) return true;
+  // Skip ruby annotations to avoid re-translating generated markup
+  if (el.tagName === "RT") return true;
   if (el.matches(EXCLUDE_SELECTOR)) return true;
   if (el.closest(EXCLUDE_SELECTOR)) return true;
 
@@ -139,10 +141,28 @@ function collectTextNodes(root = document.body) {
 function applyTranslations(nodes, translations) {
   nodes.forEach((n, i) => {
     try {
-      if (!n) return;
-      if (!ORIGINALS.has(n)) ORIGINALS.set(n, n.nodeValue);
-      n.nodeValue = translations[i];
-      TOUCHED.add(n); // mark this specific text node as translated
+      if (!n || !n.parentNode) return;
+
+      // Build ruby element: <ruby><rb>chars</rb><rt>pinyin</rt></ruby>
+      const ruby = document.createElement("ruby");
+      const rb = document.createElement("rb");
+      const rt = document.createElement("rt");
+
+      rb.textContent = n.nodeValue || "";
+      rt.textContent = translations[i] || "";
+
+      // Track text nodes so mutation observer ignores them
+      if (rb.firstChild) TOUCHED.add(rb.firstChild);
+      if (rt.firstChild) TOUCHED.add(rt.firstChild);
+
+      ruby.appendChild(rb);
+      ruby.appendChild(rt);
+
+      // Store original text node for later restoration
+      ORIGINALS.set(ruby, n);
+
+      // Replace original text node with ruby element
+      n.parentNode.replaceChild(ruby, n);
     } catch (e) {
       // ignore individual node failures
     }
@@ -150,8 +170,10 @@ function applyTranslations(nodes, translations) {
 }
 
 function revertTranslations() {
-  ORIGINALS.forEach((txt, node) => {
-    try { node.nodeValue = txt; } catch (e) {}
+  ORIGINALS.forEach((orig, ruby) => {
+    try {
+      if (ruby.parentNode) ruby.parentNode.replaceChild(orig, ruby);
+    } catch (e) {}
   });
   ORIGINALS.clear();
   TOUCHED = new WeakSet();
@@ -165,7 +187,7 @@ function startMutationObserver(onTextNodes) {
         m.addedNodes.forEach((n) => {
           if (n.nodeType === 3 && !shouldSkipTextNode(n)) {
             targets.push(n);
-          } else if (n.nodeType === 1) {
+          } else if (n.nodeType === 1 && n.tagName !== "RT") {
             collectTextNodes(n).forEach((t) => targets.push(t));
           }
         });
