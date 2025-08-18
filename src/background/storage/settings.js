@@ -1,7 +1,7 @@
 const DEFAULTS = {
   enabled: true,
-  provider: "http",      // "mock" | "http"
-  sourceLang: "auto",
+  provider: "google_free",      // "mock" | "http"
+  sourceLang: "zh",
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],
   batchSize: 200,
