@@ -4,6 +4,7 @@ const DEFAULTS = {
   sourceLang: "auto",
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],
+  pinyin: false,
   batchSize: 200,
   glossary: {
     dnt: ["Chrome", "API"],

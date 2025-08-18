@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
+  const pinyin = document.querySelector("#pinyin");
     const targetLangs = document.querySelector("#targetLangs");
     const sourceLang = document.querySelector("#sourceLang"); // ← NEW
     const excludeLangs = document.querySelector("#excludeLangs");
@@ -9,6 +10,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const settings = await send("CT_GET_SETTINGS");
     enabled.checked = !!settings.enabled;
+    pinyin.checked = !!settings.pinyin;
     targetLangs.value = (settings.targetLangs || ["es", "en"]).join(", ");
     sourceLang.value = settings.sourceLang || "auto";           // ← NEW
     excludeLangs.value = (settings.excludeLangs || ["en", "es"]).join(", ");
@@ -18,6 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#save").addEventListener("click", async () => {
     const payload = {
         enabled: enabled.checked,
+        pinyin: pinyin.checked,
         targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
         sourceLang: (sourceLang.value || "auto").trim(),        // ← NEW
         excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean),

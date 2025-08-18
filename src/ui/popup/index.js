@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
     const enabled = document.querySelector("#enabled");
+    const pinyin = document.querySelector("#pinyin");
     const targetLangs = document.querySelector("#targetLangs");
     const sourceLang = document.querySelector("#sourceLang"); // if you added this field
     const excludeLangs = document.querySelector("#excludeLangs");
@@ -7,6 +8,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const prev = await send("CT_GET_SETTINGS");
     enabled.checked = !!prev.enabled;
+    pinyin.checked = !!prev.pinyin;
     targetLangs.value = (prev.targetLangs || ["es", "en"]).join(", ");
     if (sourceLang) sourceLang.value = prev.sourceLang || "auto";
     excludeLangs.value = (prev.excludeLangs || ["en", "es"]).join(", ");
@@ -14,6 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#apply").addEventListener("click", async () => {
     const next = {
         enabled: enabled.checked,
+        pinyin: pinyin.checked,
         targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
         sourceLang: sourceLang ? (sourceLang.value || "auto").trim() : prev.sourceLang,
         excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean)
@@ -23,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // if anything that affects cache changed, clear it
       if (
         next.enabled !== prev.enabled ||
+        next.pinyin !== prev.pinyin ||
         next.sourceLang !== prev.sourceLang ||
         next.targetLangs.join(",") !== (prev.targetLangs || []).join(",")
       ) {
