@@ -4,10 +4,13 @@ import { applyGlossary, unmaskDNT } from "../glossary.js";
 import { translateMock } from "./providers/mock.js";
 import { translateHTTP } from "./providers/http.js";
 import { translateGoogleFree } from "./providers/google_free.js";  // ← NEW
+import { translateNLLB } from "./providers/nllb.js";
 
 const PROVIDERS = { mock: translateMock, 
     http: translateHTTP,
-    google_free: translateGoogleFree };
+    google_free: translateGoogleFree ,
+    nllb: translateNLLB,
+};
 
 
 export async function translateBatch(texts, opts) {
