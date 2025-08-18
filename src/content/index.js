@@ -101,16 +101,18 @@ async function translateNodes(nodes) {
   }
 
   let pinyins = [];
-  try {
-    const respPy = await pinyinRequest(unique);
-    if (Array.isArray(respPy)) pinyins = respPy;
-  } catch (e) {
-    console.warn("[CT] pinyinRequest failed; using originals", e);
-  }
+  if (currentSettings.pinyin) {
+    try {
+      const respPy = await pinyinRequest(unique);
+      if (Array.isArray(respPy)) pinyins = respPy;
+    } catch (e) {
+      console.warn("[CT] pinyinRequest failed; using originals", e);
+    }
 
-  pinyins.forEach((py, j) => {
-    for (const idx of map.get(unique[j])) PINYINS.set(nodes[idx], py);
-  });
+    pinyins.forEach((py, j) => {
+      for (const idx of map.get(unique[j])) PINYINS.set(nodes[idx], py);
+    });
+  }
 
   const expanded = new Array(nodes.length);
   translations.forEach((tr, j) => {
@@ -154,36 +156,42 @@ function collectTextNodes(root = document.body) {
   return out;
 }
 
-function applyTranslations(nodes, translations) {
-  nodes.forEach((n, i) => {
-    try {
-      if (!n || !n.parentNode) return;
+  function applyTranslations(nodes, translations) {
+    nodes.forEach((n, i) => {
+      try {
+        if (!n || !n.parentNode) return;
 
-      // Build ruby element: <ruby><rb>chars</rb><rt>pinyin</rt></ruby>
-      const ruby = document.createElement("ruby");
-      const rb = document.createElement("rb");
-      const rt = document.createElement("rt");
+        // Build ruby element: <ruby><rb>chars</rb><rt>pinyin</rt><rt>translation</rt></ruby>
+        const ruby = document.createElement("ruby");
+        const rb = document.createElement("rb");
+        const rtPy = document.createElement("rt");
+        const rtTr = document.createElement("rt");
 
-      rb.textContent = n.nodeValue || "";
-      rt.textContent = translations[i] || "";
+        rb.textContent = n.nodeValue || "";
+        const py = PINYINS.get(n);
+        PINYINS.delete(n);
+        rtPy.textContent = py || "";
+        rtTr.textContent = translations[i] || "";
 
-      // Track text nodes so mutation observer ignores them
-      if (rb.firstChild) TOUCHED.add(rb.firstChild);
-      if (rt.firstChild) TOUCHED.add(rt.firstChild);
+        // Track text nodes so mutation observer ignores them
+        if (rb.firstChild) TOUCHED.add(rb.firstChild);
+        if (rtPy.firstChild) TOUCHED.add(rtPy.firstChild);
+        if (rtTr.firstChild) TOUCHED.add(rtTr.firstChild);
 
-      ruby.appendChild(rb);
-      ruby.appendChild(rt);
+        ruby.appendChild(rb);
+        if (py) ruby.appendChild(rtPy);
+        ruby.appendChild(rtTr);
 
-      // Store original text node for later restoration
-      ORIGINALS.set(ruby, n);
+        // Store original text node for later restoration
+        ORIGINALS.set(ruby, n);
 
-      // Replace original text node with ruby element
-      n.parentNode.replaceChild(ruby, n);
-    } catch (e) {
-      // ignore individual node failures
-    }
-  });
-}
+        // Replace original text node with ruby element
+        n.parentNode.replaceChild(ruby, n);
+      } catch (e) {
+        // ignore individual node failures
+      }
+    });
+  }
 
 function revertTranslations() {
   ORIGINALS.forEach((orig, ruby) => {
@@ -192,8 +200,9 @@ function revertTranslations() {
     } catch (e) {}
   });
   ORIGINALS.clear();
+  PINYINS.clear();
   TOUCHED = new WeakSet();
-}
+  }
 
 function startMutationObserver(onTextNodes) {
   const mo = new MutationObserver((muts) => {
