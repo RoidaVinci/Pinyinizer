@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
   const modeTranslate = document.querySelector("#modeTranslate");
   const modePinyin = document.querySelector("#modePinyin");
+  const pinyinProvider = document.querySelector("#pinyinProvider");
 
   const pinyinSection = document.querySelector("#pinyinSection");
   const translateSection = document.querySelector("#translateSection");
@@ -27,7 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // pinyin options
   annotateShowEnglish.checked = !!settings.annotate?.showEnglish;
-
+  if (pinyinProvider) pinyinProvider.value = settings.pinyinProvider || "pinyin_pro_local";
   const sHanzi = clampNum(settings.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
   const sPinyin = clampNum(settings.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
   hanziScale.value = sHanzi;
@@ -52,6 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelector("#save").addEventListener("click", async () => {
     const payload = {
       mode: modePinyin.checked ? "pinyin" : "translate",
+      pinyinProvider: pinyinProvider ? pinyinProvider.value : (settings.pinyinProvider || "pinyin_pro_local"),
       annotate: {
         ...(settings.annotate || {}),
         showEnglish: annotateShowEnglish.checked,

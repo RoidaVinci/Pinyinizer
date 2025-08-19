@@ -22,14 +22,21 @@
         <span>Also show English (keep English after Hanzi)</span>
         <input id="annotateShowEnglish" type="checkbox" />
       </label>
+    <label class="stack" style="margin-bottom:16px;">
+    <span>Pinyin provider</span>
+    <select id="pinyinProvider">
+      <option value="pinyin_pro">Pinyin-pro (offline, faster)</option>
+      <option value="google_free">Google (free)</option>
+   </select>
+  </label>
 
       <!-- NEW: scales for no-English layout -->
-      <label>
+      <label style="margin-bottom:16px;">
         <span>Hanzi scale (no English)</span>
         <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="hanziScaleVal"></code></small>
       </label>
-      <label>
+      <label style="margin-bottom:16px;">
         <span>Pinyin scale (no English)</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
@@ -43,15 +50,15 @@
         <input id="enabled" type="checkbox" />
       </label>
 
-      <label>
+      <label style="margin-bottom:16px;">
         <span>Target languages</span>
         <input id="targetLangs" placeholder="es, en" />
       </label>
-      <label>
+      <label style="margin-bottom:16px;">
         <span>Source language</span>
         <input id="sourceLang" placeholder="auto (or zh, en, ...)" />
       </label>
-      <label>
+      <label style="margin-bottom:16px;">
         <span>Exclude languages</span>
         <input id="excludeLangs" placeholder="en, es" />
       </label>

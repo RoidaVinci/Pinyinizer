@@ -4,8 +4,8 @@ import { pinyinGoogleFree } from "./providers/google_pinyin_free.js";
 import { pinyinProLocal } from "./providers/pinyin_pro_local.js";
 
 const PROVIDERS = {
-  google_free: pinyinGoogleFree,
   pinyin_pro_local: pinyinProLocal,
+  google_free: pinyinGoogleFree,
 };
 
 export async function annotateBatch(texts, opts) {
@@ -23,7 +23,7 @@ export async function annotateBatch(texts, opts) {
   arr.forEach((s, i) => { if (cached[i] == null) { missIdx.push(i); misses.push(s); } });
   if (!misses.length) return cached;
 
-  const p = PROVIDERS[pinyinProvider] || pinyinGoogleFree;
+  const p = PROVIDERS[pinyinProvider] || pinyinProLocal;
   let missOut = [];
   try {
     missOut = await p(misses);
