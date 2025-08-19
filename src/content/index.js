@@ -26,7 +26,7 @@ const EXCLUDE_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT"]);
 const EXCLUDE_SELECTOR =
   "pre, code, textarea, input, select, option, [contenteditable]";
 let TOUCHED = new WeakSet();
-const ORIGINALS = new Map();
+const ORIGINALS = new Map();  // Map<TextNode, { text, parent, nextSibling, wrapper }>
 let currentSettings;
 let currentLangs = { source: "auto", target: "es" };
 let disconnectMo;
@@ -353,8 +353,12 @@ function replaceTextNode(node, wrapper) {
   const parent = node?.parentNode;
   if (!parent) return false;        // detached → skip safely
 
-  // Keep original so undo still works
-  if (!ORIGINALS.has(node)) ORIGINALS.set(node, { text: node.nodeValue });
+  const nextSibling = node.nextSibling;
+
+  // Keep a full restoration record once.
+  if (!ORIGINALS.has(node)) {
+    ORIGINALS.set(node, { text: node.nodeValue, parent, nextSibling, wrapper: null });
+  }
 
   try {
     parent.insertBefore(wrapper, node);
@@ -363,6 +367,11 @@ function replaceTextNode(node, wrapper) {
   }
 
   try { node.remove(); } catch {}
+
+  // Save wrapper reference for later removal
+  const rec = ORIGINALS.get(node);
+  if (rec && !rec.wrapper) rec.wrapper = wrapper;
+
   TOUCHED.add(node);
   return true;
 }
@@ -430,7 +439,10 @@ function applyTranslations(nodes, translations) {
   nodes.forEach((n, i) => {
     try {
       if (!n) return;
-      if (!ORIGINALS.has(n)) ORIGINALS.set(n, n.nodeValue);
+      // Store full restoration info once (in case we undo later)
+      if (!ORIGINALS.has(n)) {
+        ORIGINALS.set(n, { text: n.nodeValue, parent: n.parentNode, nextSibling: n.nextSibling, wrapper: null });
+      }
       n.nodeValue = translations[i];
       TOUCHED.add(n);
     } catch {}
@@ -440,10 +452,25 @@ function applyTranslations(nodes, translations) {
 function revertTranslations() {
   ORIGINALS.forEach((rec, node) => {
     try {
-      if (rec?.wrapper) {
+      // If there was a wrapper (pinyin mode), remove it
+      if (rec?.wrapper && rec.wrapper.parentNode) {
         try { rec.wrapper.remove(); } catch {}
       }
-      node.nodeValue = rec?.text ?? node.nodeValue;
+      // Restore original text content
+      if (typeof rec?.text === "string") {
+        node.nodeValue = rec.text;
+      }
+      // Reattach original text node where it used to be
+      const p = rec?.parent;
+      if (p && !node.parentNode) {
+        try {
+          if (rec.nextSibling && rec.nextSibling.parentNode === p) {
+            p.insertBefore(node, rec.nextSibling);
+          } else {
+            p.appendChild(node);
+          }
+        } catch {}
+      }
     } catch {}
   });
   ORIGINALS.clear();

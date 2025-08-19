@@ -58,20 +58,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     await send("CT_SET_SETTINGS", next);
 
-    // No need to clear translation cache for pinyin-only visual changes.
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tab = tabs[0];
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: "CT_APPLY_NOW" });
-    });
-
+    // RELIABLE apply: message with retries; inject if needed.
+    await sendToActiveTab("CT_APPLY_NOW");
     window.close();
   });
 
-  document.querySelector("#undo").addEventListener("click", () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tab = tabs[0];
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: "CT_UNDO" });
-    });
+  document.querySelector("#undo").addEventListener("click", async () => {
+    // RELIABLE undo: message with retries; inject if needed.
+    await sendToActiveTab("CT_UNDO");
     window.close();
   });
 
@@ -88,3 +82,50 @@ function send(type, payload) {
   );
 }
 const clampNum = (n, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));
+
+/** Robustly send a message to the active tab's content script.
+ *  - Retries a few times (service worker/content script wake-ups).
+ *  - If failing, injects the content script and tries once more.
+ */
+async function sendToActiveTab(type, payload) {
+  const tab = await getActiveTab();
+  if (!tab?.id) return false;
+
+  // Try up to 3 times quickly
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ok = await trySend(tab.id, { type, payload });
+    if (ok) return true;
+    await delay(150 * (attempt + 1));
+  }
+
+  // As a last resort, inject the content script (all frames) and retry once
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      files: ["src/content/index.js"],
+    });
+  } catch (_) { /* ignore */ }
+
+  return await trySend(tab.id, { type, payload });
+}
+
+function getActiveTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0]));
+  });
+}
+
+function trySend(tabId, msg) {
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.sendMessage(tabId, msg, () => {
+        const err = chrome.runtime.lastError;
+        resolve(!err);
+      });
+    } catch (_) {
+      resolve(false);
+    }
+  });
+}
+
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
