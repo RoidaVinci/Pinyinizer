@@ -304,7 +304,7 @@ async function annotateNodes(nodes) {
           if (eng) {
             const enEl = document.createElement("span");
             enEl.className = "ct-en";
-            enEl.textContent = eng;
+            enEl.textContent = `(${eng})`;
             wrapper.appendChild(enEl);
             hadEnglish = true;
           }
@@ -579,7 +579,7 @@ function ensurePinyinStyles() {
     color: #555; 
   }
   .ct-ruby-block .ct-en {
-    display: block;
+    display: inline-block;
     margin-top: 0.1em;
     font-size: ${englishScale}em;
     line-height: 1.05;
