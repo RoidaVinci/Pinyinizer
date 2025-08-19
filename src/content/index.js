@@ -1,6 +1,18 @@
 // --- Clean Translate: single-file content script (no imports) ---
 
 const HAN_RE = /\p{Script=Han}+/gu;
+// --- Style constants (tweak freely) ---
+// Downshift thresholds
+const CT_MAX_OVERRUN_RATIO = 1.02;  // allow up to 2% scrollWidth over clientWidth before downshifting
+const CT_MAX_HEIGHT_GAIN   = 1.3;   // if new height > 1.6x original, consider downshift
+
+// Compact scales
+const COMPACT_HANZI_SCALE  = 0.50;
+const COMPACT_PINYIN_SCALE = 0.35;
+
+// Hover mode tooltip look (optional — tweak later)
+const HOVER_RT_BG   = "rgba(0,0,0,.75)";
+const HOVER_RT_FG   = "#fff";
 
 // ===== Single-instance guard (no top-level return) =====
 const __CT_HTML__ = document.documentElement;
@@ -196,39 +208,50 @@ async function annotateTree(root) {
     return false;
   }
 }
-
 async function annotateNodes(nodes) {
-  // Collect Han runs per node
+  // 1) Collect Han runs per node + unique runs + unique characters
   const nodeRuns = [];
   const allRuns = [];
+  const allChars = new Set();
+
   nodes.forEach((n, i) => {
     const txt = n.nodeValue || "";
     const runs = [];
     for (const m of txt.matchAll(HAN_RE)) {
-      runs.push({ start: m.index, end: m.index + m[0].length, han: m[0] });
-      allRuns.push(m[0]);
+      const han = m[0];
+      runs.push({ start: m.index, end: m.index + han.length, han });
+      allRuns.push(han);
+      for (const ch of Array.from(han)) allChars.add(ch);
     }
     nodeRuns[i] = runs;
   });
   if (!allRuns.length) return;
 
-  // Unique runs for lookup
-  const unique = Array.from(new Set(allRuns));
+  const uniqRuns  = Array.from(new Set(allRuns));
+  const uniqChars = Array.from(allChars);
 
-  // 1) Pinyin map
-  let pyArr = unique.slice();
+  // 2) Run-level pinyin (fast path)
+  let runPinyinArr = uniqRuns.slice();
   try {
-    const resp = await sendMessageSafe({ type: "CT_ANNOTATE_BATCH", payload: { texts: unique } });
-    if (Array.isArray(resp?.pinyins)) pyArr = resp.pinyins;
+    const resp = await sendMessageSafe({ type: "CT_ANNOTATE_BATCH", payload: { texts: uniqRuns } });
+    if (Array.isArray(resp?.pinyins)) runPinyinArr = resp.pinyins;
   } catch {}
-  const pyMap = new Map(unique.map((u, i) => [u, pyArr[i] || u]));
+  const runPyMap = new Map(uniqRuns.map((u, i) => [u, runPinyinArr[i] || u]));
 
-  // 2) Optional English map
+  // 3) Character-level pinyin (fallback for mismatches)
+  let charPinyinArr = uniqChars.slice();
+  try {
+    const respChar = await sendMessageSafe({ type: "CT_ANNOTATE_BATCH", payload: { texts: uniqChars } });
+    if (Array.isArray(respChar?.pinyins)) charPinyinArr = respChar.pinyins;
+  } catch {}
+  const charPyMap = new Map(uniqChars.map((u, i) => [u, charPinyinArr[i] || ""]));
+
+  // 4) Optional English per run
   const showEnglish = !!(currentSettings?.annotate && currentSettings.annotate.showEnglish);
   let enMap = null;
-  if (showEnglish) enMap = await fetchEnglishMap(unique);
+  if (showEnglish) enMap = await fetchEnglishMap(uniqRuns);
 
-  // 3) Build wrappers + ruby per node
+  // 5) Build wrappers; measure & downshift as needed
   IS_MUTATING = true;
   try {
     nodes.forEach((node, i) => {
@@ -237,66 +260,102 @@ async function annotateNodes(nodes) {
       if (!runs.length) return;
 
       const wrapper = document.createElement("span");
-      wrapper.setAttribute("data-ct", "ruby-block"); // we always skip inside this
+      wrapper.setAttribute("data-ct", "ruby-block");
       wrapper.className = "ct-ruby-block";
 
       let cursor = 0;
+      let hadEnglish = false;
+      const pyPlainParts = [];
 
       for (const r of runs) {
+        // leading plain text before this run
         if (r.start > cursor) {
           wrapper.append(document.createTextNode(txt.slice(cursor, r.start)));
         }
 
-        // consume any immediate site-provided English
+        // consume site-provided English that follows the Han run
         let consumed = consumeAsciiParenSuffix(txt, r.end);
         if (!consumed) consumed = consumePlainLatinSuffix(txt, r.end);
 
-        // ruby block
-        const ruby = document.createElement("ruby");
+        // build ruby per character
+        const ruby  = document.createElement("ruby");
         ruby.className = "ct-ruby";
         ruby.setAttribute("data-ct", "ruby");
 
-        const rb = document.createElement("rb");
-        rb.textContent = r.han;
+        const chars = Array.from(r.han);
+        const phrasePy = runPyMap.get(r.han) || r.han;
+        const pys = syllabifyOrCharLookup(chars, phrasePy, charPyMap);
 
-        const rt = document.createElement("rt");
-        const py = pyMap.get(r.han) || r.han;
-        if (showEnglish && enMap) {
-          const engRaw = enMap.get(r.han) || "";
-          const eng = isLatinNoHan(engRaw) ? (" " + engRaw) : "";
-          rt.textContent = `${py}${eng}`;
-        } else {
-          rt.textContent = py;
+        for (let k = 0; k < chars.length; k++) {
+          const rb = document.createElement("rb");
+          rb.textContent = chars[k];
+          const rt = document.createElement("rt");
+          rt.textContent = pys[k] || "";
+          ruby.appendChild(rb);
+          ruby.appendChild(rt);
+          if (pys[k]) pyPlainParts.push(pys[k]);
         }
 
-        ruby.appendChild(rb);
-        ruby.appendChild(rt);
         wrapper.appendChild(ruby);
+
+        // optional English (phrase-level)
+        if (showEnglish && enMap) {
+          const eng = (enMap.get(r.han) || "").trim();
+          if (eng) {
+            const enEl = document.createElement("span");
+            enEl.className = "ct-en";
+            enEl.textContent = eng;
+            wrapper.appendChild(enEl);
+            hadEnglish = true;
+          }
+        }
 
         cursor = r.end + consumed;
       }
 
+      // trailing text after last run
       if (cursor < txt.length) {
         wrapper.append(document.createTextNode(txt.slice(cursor)));
       }
 
-      try {
-        if (!ORIGINALS.has(node)) {
-            ORIGINALS.set(node, { text: txt });
-          }
-          node.replaceWith(wrapper);
-        TOUCHED.add(node);
-      } catch {}
+      wrapper.setAttribute("data-has-en", hadEnglish ? "1" : "0");
+
+
+      if (!replaceTextNode(node, wrapper)) {
+        // If the node vanished during processing, just skip this one.
+        return;
+      }
     });
   } finally {
     IS_MUTATING = false;
   }
 
-  // Optional: clean tiny latin-only siblings
+  // 6) Clean tiny latin-only siblings the site might add
   for (const n of nodes) stripFollowingLatinSiblings(n, { maxNodes: 2, maxChars: 140 });
 
-  console.log(`[CT] annotated ${nodes.length} nodes (ruby)`);
+  console.log(`[CT] annotated ${nodes.length} nodes (hybrid + adaptive layout)`);
 }
+
+
+// Add anywhere above annotateNodes (or below helpers)
+function replaceTextNode(node, wrapper) {
+  const parent = node?.parentNode;
+  if (!parent) return false;        // detached → skip safely
+
+  // Keep original so undo still works
+  if (!ORIGINALS.has(node)) ORIGINALS.set(node, { text: node.nodeValue });
+
+  try {
+    parent.insertBefore(wrapper, node);
+  } catch (_) {
+    return false;                   // parent changed in between
+  }
+
+  try { node.remove(); } catch {}
+  TOUCHED.add(node);
+  return true;
+}
+
 
 // ---- helpers: consume site english ----
 function consumeAsciiParenSuffix(full, pos) {
@@ -480,16 +539,75 @@ function sendMessageSafe(msg, retries = 3, delayMs = 200) {
 // ---- styles & presence checks ----
 function ensurePinyinStyles() {
   if (document.getElementById("ct-pinyin-styles")) return;
+
+  // Read user-chosen scales from settings (with defaults)
+  const hanziScaleNoEn  = currentSettings?.annotate?.hanziScale ?? 0.90;
+  const pinyinScaleNoEn = currentSettings?.annotate?.pinyinScale ?? 0.53;
+
+  // With-English scales (keep fixed unless you also add UI controls)
+  const hanziScaleWithEn  = hanziScaleNoEn;
+  const pinyinScaleWithEn = pinyinScaleNoEn;
+  const englishScale      = pinyinScaleNoEn*0.8;
+
   const css = `
-  .ct-ruby { ruby-position: under; }
-  .ct-ruby rt { font-size: 0.72em; line-height: 0.9; color: #555; }
-  .ct-ruby rb { font-size: 0.92em; }
+  .ct-ruby { 
+    ruby-position: under;
+    ruby-align: center;
+    white-space: normal;
+  }
+  .ct-ruby rb, .ct-ruby rt { white-space: pre; }
+
+  /* No-English sizing (uses user settings) */
+  .ct-ruby-block[data-has-en="0"] .ct-ruby rb { 
+    font-size: ${hanziScaleNoEn}em; 
+    letter-spacing: 0.05em;
+  }
+  .ct-ruby-block[data-has-en="0"] .ct-ruby rt { 
+    font-size: ${pinyinScaleNoEn}em; 
+    line-height: 1.1; 
+    color: #555; 
+  }
+
+  /* With-English sizing (fixed) */
+  .ct-ruby-block[data-has-en="1"] .ct-ruby rb { 
+    font-size: ${hanziScaleWithEn}em; 
+    letter-spacing: 0.05em;
+  }
+  .ct-ruby-block[data-has-en="1"] .ct-ruby rt { 
+    font-size: ${pinyinScaleWithEn}em; 
+    line-height: 1.1; 
+    color: #555; 
+  }
+  .ct-ruby-block .ct-en {
+    display: block;
+    margin-top: 0.1em;
+    font-size: ${englishScale}em;
+    line-height: 1.05;
+    color: #666;
+    font-style: italic;
+    white-space: normal;
+  }
+
+  .ct-ruby-block{
+    display: inline-block;     /* stays in normal inline flow */
+    vertical-align: baseline;  /* line box stays sane */
+    max-width: 100%;
+    white-space: normal;
+  }
+
   `;
+
+  const extra = `
+
+  `;
+
   const el = document.createElement("style");
   el.id = "ct-pinyin-styles";
-  el.textContent = css;
+  el.textContent = css + extra;
   document.documentElement.appendChild(el);
 }
+
+
 
 function hasPinyinDecorations(root = document) {
   // Presence of our wrappers is the BFCache-safe signal
@@ -548,3 +666,46 @@ async function requestEnglish(arr, provider) {
   });
   return Array.isArray(resp?.translations) ? resp.translations : arr;
 }
+
+
+function mapCharsToPinyin(chars, pinyinStr) {
+  // Split pinyin on spaces (and collapse multiple spaces)
+  const raw = (pinyinStr || "").trim().split(/\s+/);
+  const out = [];
+  if (raw.length === chars.length) {
+    for (let i = 0; i < chars.length; i++) out.push(raw[i] || "");
+    return out;
+  }
+  // Fallback: best-effort mapping (assign by index, empty if missing)
+  for (let i = 0; i < chars.length; i++) out.push(raw[i] || "");
+  return out;
+}
+
+function normalizePinyin(str) {
+  // strip parens, commas, extra punctuation; collapse spaces
+  return String(str || "")
+    .replace(/[()（），,.;:·]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Try to split a pinyin phrase into syllables.
+// If it looks word-level (e.g., capitalized words), this still returns tokens,
+// but we only trust the result when count matches charCount.
+function splitPinyinSyllables(pinyinStr) {
+  const s = normalizePinyin(pinyinStr);
+  if (!s) return [];
+  // Tokens separated by space or apostrophe; remove stray non-letters/diacritics.
+  return s.split(/[\s’']+/).map(t => t.replace(/[^a-zA-ZāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüÜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙ]+/g, "")).filter(Boolean);
+}
+
+// Returns an array of length = chars.length.
+// 1) try to syllabify pyPhrase; 2) if mismatch → build using charPinyinMap (guaranteed 1:1)
+function syllabifyOrCharLookup(chars, pyPhrase, charPinyinMap) {
+  const bySplit = splitPinyinSyllables(pyPhrase);
+  if (bySplit.length === chars.length) return bySplit;
+  // fallback to per-char map
+  return chars.map(ch => charPinyinMap.get(ch) || "");
+}
+
+

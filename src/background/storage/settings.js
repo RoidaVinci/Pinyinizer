@@ -7,7 +7,10 @@ const DEFAULTS = {
   batchSize: 200,
   mode: "translate",     // "translate" | "pinyin"
   annotate: {
-    showEnglish: false   // when in pinyin mode: keep existing English glosses right after Hanzi
+    showEnglish: false,   // keep English glosses after Hanzi
+    // NEW — default scales used in pinyin mode when English is NOT shown
+    hanziScale: 0.90,     // matches your previous const HANZI_SCALE_NO_EN
+    pinyinScale: 0.53     // matches your previous const PINYIN_SCALE_NO_EN
   },
   glossary: {
     dnt: ["Chrome", "API"],

@@ -19,8 +19,20 @@
     <section id="pinyinSection">
       <h2>Pinyin options</h2>
       <label>
-        <span>Also show English (keep English in parentheses after Hanzi)</span>
+        <span>Also show English (keep English after Hanzi)</span>
         <input id="annotateShowEnglish" type="checkbox" />
+      </label>
+
+      <!-- NEW: scales for no-English layout -->
+      <label>
+        <span>Hanzi scale (no English)</span>
+        <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
+        <small><code id="hanziScaleVal"></code></small>
+      </label>
+      <label>
+        <span>Pinyin scale (no English)</span>
+        <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
+        <small><code id="pinyinScaleVal"></code></small>
       </label>
     </section>
 

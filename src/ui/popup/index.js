@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const translateSection = document.querySelector("#translateSection");
   const annotateShowEnglish = document.querySelector("#annotateShowEnglish");
 
+  const hanziScale = document.querySelector("#hanziScale");
+  const pinyinScale = document.querySelector("#pinyinScale");
+  const hanziScaleVal = document.querySelector("#hanziScaleVal");
+  const pinyinScaleVal = document.querySelector("#pinyinScaleVal");
+
   const targetLangs = document.querySelector("#targetLangs");
   const sourceLang = document.querySelector("#sourceLang");
   const excludeLangs = document.querySelector("#excludeLangs");
@@ -17,6 +22,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   toggleSections(prev.mode);
 
   annotateShowEnglish.checked = !!prev.annotate?.showEnglish;
+
+  // NEW — load scales
+  const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
+  const sPinyin = clampNum(prev.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
+  hanziScale.value = sHanzi;
+  pinyinScale.value = sPinyin;
+  hanziScaleVal.textContent = sHanzi.toFixed(2);
+  pinyinScaleVal.textContent = sPinyin.toFixed(2);
+
+  hanziScale.addEventListener("input", () => hanziScaleVal.textContent = (+hanziScale.value).toFixed(2));
+  pinyinScale.addEventListener("input", () => pinyinScaleVal.textContent = (+pinyinScale.value).toFixed(2));
 
   enabled.checked = !!prev.enabled;
   targetLangs.value = (prev.targetLangs || ["es", "en"]).join(", ");
@@ -31,7 +47,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       mode: modePinyin.checked ? "pinyin" : "translate",
       annotate: {
         ...(prev.annotate || {}),
-        showEnglish: annotateShowEnglish.checked
+        showEnglish: annotateShowEnglish.checked,
+        hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
+        pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2)
       },
       enabled: enabled.checked,
       targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
@@ -40,15 +58,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     await send("CT_SET_SETTINGS", next);
 
-    if (
-      next.mode !== prev.mode ||
-      next.enabled !== prev.enabled ||
-      next.sourceLang !== prev.sourceLang ||
-      next.targetLangs.join(",") !== (prev.targetLangs || []).join(",")
-    ) {
-      await send("CT_CLEAR_CACHE");
-    }
-
+    // No need to clear translation cache for pinyin-only visual changes.
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
       const tab = tabs[0];
       if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: "CT_APPLY_NOW" });
@@ -77,16 +87,4 @@ function send(type, payload) {
     chrome.runtime.sendMessage({ type, payload }, resolve)
   );
 }
-
-function ensurePinyinStyles() {
-  if (document.getElementById("ct-pinyin-styles")) return;
-  const css = `
-  .ct-ruby { ruby-position: under; }
-  .ct-ruby rt { font-size: 0.72em; line-height: 0.9; color: #555; }
-  .ct-ruby rb { font-size: 0.92em; }
-  `;
-  const el = document.createElement("style");
-  el.id = "ct-pinyin-styles";
-  el.textContent = css;
-  document.documentElement.appendChild(el);
-}
+const clampNum = (n, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));
