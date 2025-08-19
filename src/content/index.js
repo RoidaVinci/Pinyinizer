@@ -31,6 +31,9 @@ let currentSettings;
 let currentLangs = { source: "auto", target: "es" };
 let disconnectMo;
 let IS_MUTATING = false;
+let SESSION_MODE_OVERRIDE = null;
+const getMode = () => (SESSION_MODE_OVERRIDE || (currentSettings?.mode || "translate"));
+
 
 // Entry
 (async function main() {
@@ -68,6 +71,12 @@ let IS_MUTATING = false;
       if (msg?.type === "CT_APPLY_NOW") {
         (async () => {
           currentSettings = await getSettings();
+          if (!currentSettings?.enabled) {
+            revertTranslations();
+            disconnectMo?.();
+            disconnectMo = null;
+            return;
+          }
           revertTranslations();
           disconnectMo?.();
           await raf();
@@ -96,9 +105,10 @@ let IS_MUTATING = false;
 
 // MO handler
 async function handleMutations(nodes) {
+  if (!currentSettings?.enabled) return;
   const filtered = nodes.filter((n) => !shouldSkipTextNode(n));
   if (!filtered.length) return;
-  if (currentSettings?.mode === "pinyin") {
+  if (getMode() === "pinyin") {
     await annotateNodes(filtered);
   } else {
     await translateNodes(filtered);

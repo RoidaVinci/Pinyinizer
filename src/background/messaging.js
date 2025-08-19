@@ -10,7 +10,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const settings = await getSettings();
       const { texts = [], opts = {} } = msg.payload || {};
 
-      // Block translations in pinyin mode UNLESS the caller explicitly allows it.
+      // Global kill switch: if disabled, do absolutely nothing.
+      if (!settings.enabled) {
+        sendResponse({ translations: texts });
+        return;      }
       if (settings.mode === "pinyin" && !opts?.allowInPinyin) {
         sendResponse({ translations: texts });
         return;
@@ -30,6 +33,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === "CT_ANNOTATE_BATCH") {
       const settings = await getSettings();
       const { texts = [] } = msg.payload || {};
+      // Global kill switch: if disabled, do absolutely nothing.
+      if (!settings.enabled) {
+         sendResponse({ pinyins: texts });
+        return;
+      }
       try {
         const pinyins = await annotateBatch(texts, settings);
         sendResponse({ pinyins });
@@ -51,7 +59,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await setSettings(msg.payload || {});
       try {
         const s = await getSettings();
-        chrome.action.setBadgeText({ text: s.mode === "pinyin" ? "PY" : "TR" });
+
+        // Badge state: OFF when disabled, PY when pinyin mode (and enabled), else empty
+        const text = !s.enabled ? "OFF" : (s.mode === "pinyin" ? "PY" : "TR");
+        chrome.action.setBadgeText({ text });
+        // Optional (harmless if unsupported): subtle badge color cue
+        try { chrome.action.setBadgeBackgroundColor?.({ color: !s.enabled ? "#777" : "#0b74e0" }); } catch {}
       } catch {}
       sendResponse({ ok: true });
       return;
