@@ -1,4 +1,11 @@
 // --- Clean Translate: single-file content script (no imports) ---
+(() => {
+  // Skip if we've already run in this page/frame (same isolated world)
+  if (window.__CT_LOADED__) {
+    try { console.debug("[CT] content script already loaded — skipping"); } catch {}
+    return;
+  }
+  window.__CT_LOADED__ = true;
 
 const HAN_RE = /\p{Script=Han}+/gu;
 // --- Style constants (tweak freely) ---
@@ -731,3 +738,6 @@ function syllabifyOrCharLookup(chars, pyPhrase, charPinyinMap) {
   // fallback to per-char map
   return chars.map(ch => charPinyinMap.get(ch) || "");
 }
+
+
+})(); // end IIFE, prevents top-level redeclarations
