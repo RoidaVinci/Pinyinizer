@@ -52,6 +52,16 @@ const getMode = () => (SESSION_MODE_OVERRIDE || (currentSettings?.mode || "trans
 
     currentSettings = await getSettings();
     if (!currentSettings?.enabled) return;
+    try {
+      // Undo any previous accidental root-level tweaks
+      const html = document.documentElement;
+      const body = document.body;
+      ["min-height", "height", "overflow-y", "overflow"].forEach(p => {
+        if (html && html.style && html.style[p]) html.style.removeProperty(p);
+        if (body && body.style && body.style[p]) body.style.removeProperty(p);
+      });
+    } catch {}
+
 
     // Let BFCache restore settle, then check if ruby already present
     await raf2();
@@ -354,6 +364,24 @@ async function annotateNodes(nodes) {
         // If the node vanished during processing, just skip this one.
         return;
       }
+// If inside a nav/menu, don't touch layout; just compress the anchor.
+const inNav = wrapper.closest('.nav-cont, .nav, .menu, .navbar');
+if (inNav) {
+  // hide the English gloss in navs (extra safety; also done via CSS)
+  try { wrapper.querySelector('.ct-sentence-en')?.remove(); } catch {}
+  const a = wrapper.closest('a');
+  if (a) {
+    a.style.whiteSpace = 'nowrap';
+    a.style.textOverflow = 'ellipsis';
+    a.style.overflow = 'hidden';
+    if (!a.style.maxWidth) a.style.maxWidth = '12ch';
+  }
+} else {
+  adaptLayout(wrapper);
+  fixRowLayout(wrapper);
+}
+
+
 
       // Optional local downshift if wrapper grows too tall
       const rbox = wrapper.getBoundingClientRect();
@@ -400,6 +428,234 @@ function replaceTextNode(node, wrapper) {
   TOUCHED.add(node);
   return true;
 }
+
+// ===== Adaptive layout helpers =====
+function adaptLayout(wrapper) {
+  let el = wrapper.parentElement;
+  for (let hops = 0; el && hops < 6; hops++, el = el.parentElement) {
+    const tag = el.tagName;
+    // Never touch global chrome: these caused the footer-in-the-middle bug
+    if (tag === "HTML" || tag === "BODY" || tag === "HEADER" || tag === "NAV" || tag === "FOOTER") break;
+
+    const cs = getComputedStyle(el);
+    // 0) Always try to defeat single-line ellipsis and -webkit-line-clamp here.
+    openEllipsis(el, cs);
+
+    // 1) CSS Grid with fixed auto rows (masonry-like)
+    if (cs.display === "grid") {
+      tryGridRowSpan(el, wrapper);
+      const item = findImmediateItem(wrapper, el);
+      if (item) {
+        item.style.minWidth = "0";
+        item.style.minHeight = "0";
+        item.style.overflow = "visible";
+      }
+      // grid handled; keep walking one more ancestor just in case, then break
+      continue;
+    }
+
+    // 2) Flex rows that vertically center/squash
+    if (cs.display === "flex") {
+      const item = findImmediateItem(wrapper, el);
+      if (item) {
+        item.style.minWidth = "0";
+        item.style.minHeight = "0";
+        item.style.overflow = "visible";
+      }
+      // keep walking; there may still be a fixed-height ancestor
+    }
+
+    // 3) Tables
+    if (el.tagName === "TD" || el.tagName === "TH") {
+      el.style.whiteSpace = "normal";
+      el.style.overflow = "visible";
+      el.style.verticalAlign = "top";
+    }
+
+    // 4) Fixed-height / max-height rows (common in announcement lists)
+    //    If content is taller than the box, let it grow.
+    const hPx = parseFloat(cs.height);
+    const hasFixedHeight =
+      cs.height && cs.height.endsWith("px") && hPx > 0 && cs.height !== "auto";
+
+    const maxPx = parseFloat(cs.maxHeight);
+    const hasMaxHeight =
+      cs.maxHeight && cs.maxHeight !== "none" && !Number.isNaN(maxPx);
+
+    const needMoreY = el.scrollHeight > el.clientHeight + 1;
+
+    if (needMoreY && (hasFixedHeight || hasMaxHeight)) {
+      // preserve at least old visual height; then allow growth
+      if (hasFixedHeight) {
+        el.style.minHeight = Math.max(hPx, el.clientHeight) + "px";
+        el.style.height = "auto";
+      }
+      if (hasMaxHeight) {
+        el.style.maxHeight = "none";
+      }
+      el.style.overflowY = "visible";
+    }
+
+    // 5) If ancestor itself is clipping, open it up (one by one, locally)
+    if (needMoreY && (cs.overflowY === "hidden" || cs.overflowY === "clip")) {
+      el.style.overflowY = "visible";
+    }
+    if (cs.overflowX === "hidden" || cs.overflowX === "clip") {
+      el.style.overflowX = "visible";
+    }
+  }
+}
+
+function openEllipsis(el, cs = getComputedStyle(el)) {
+  const t = el.tagName;
+  if (t === "HTML" || t === "BODY" || t === "HEADER" || t === "NAV" || t === "FOOTER") return;
+  // Single-line ellipsis pattern: nowrap + hidden/ellipsis
+  if (cs.whiteSpace === "nowrap" &&
+      (cs.textOverflow === "ellipsis" || cs.overflowX === "hidden" || cs.overflow === "hidden")) {
+    el.style.whiteSpace = "normal";
+    el.style.textOverflow = "clip";
+    el.style.overflowX = "visible";
+    el.style.overflow = "visible";
+  }
+
+  // WebKit line-clamp pattern: display:-webkit-box + -webkit-line-clamp
+  // We can't read webkitLineClamp from computed styles reliably; detect by display.
+  if (cs.display === "-webkit-box") {
+    // break the clamp: switch to block and remove clamp + orientation
+    el.style.display = "block";
+    el.style.webkitLineClamp = "unset";
+    el.style.webkitBoxOrient = "initial";
+    el.style.overflow = "visible";
+  }
+}
+
+
+// ===== Row layout fix: keep columns aligned and rows growing together =====
+
+// Find the nearest "row-like" container for this wrapper.
+// We stop before touching HTML/BODY/HEADER/NAV/FOOTER.
+function findRowContainer(wrapper) {
+  let el = wrapper.parentElement;
+  for (let hops = 0; el && hops < 8; hops++, el = el.parentElement) {
+    const tag = el.tagName;
+    if (tag === "HTML" || tag === "BODY" || tag === "HEADER" || tag === "NAV" || tag === "FOOTER") return null;
+
+    const cs = getComputedStyle(el);
+    const disp = cs.display;
+
+    // Strong signals of a "row": table-row, <tr>, list-item with multiple columns, flex/grid with multiple children
+    const isTableRow = tag === "TR" || disp === "table-row";
+    const isFlexOrGrid = (disp === "flex" || disp === "inline-flex" || disp === "grid" || disp === "inline-grid");
+
+    if (isTableRow) return el;
+
+    if (isFlexOrGrid) {
+      // Heuristic: row-like if it has 2–6 element children (left/title/right style)
+      const childEls = Array.from(el.children).filter(n => n.nodeType === 1);
+      if (childEls.length >= 2 && childEls.length <= 6) return el;
+    }
+
+    // Lists that act like rows
+    if (tag === "LI" || el.getAttribute("role") === "row") return el;
+  }
+  return null;
+}
+
+function fixRowLayout(wrapper) {
+  const row = findRowContainer(wrapper);
+  if (!row) return;
+
+  const cs = getComputedStyle(row);
+  const disp = cs.display;
+
+  // 1) Ensure the row itself can grow in height (remove fixed heights/clamps)
+  const hPx = parseFloat(cs.height);
+  const hasFixedH = cs.height && cs.height.endsWith("px") && hPx > 0 && cs.height !== "auto";
+  if (hasFixedH) {
+    row.style.minHeight = Math.max(hPx, row.clientHeight) + "px";
+    row.style.height = "auto";
+  }
+  if (cs.maxHeight && cs.maxHeight !== "none") row.style.maxHeight = "none";
+  if ((cs.overflowY === "hidden" || cs.overflowY === "clip") && row.scrollHeight > row.clientHeight + 1) {
+    row.style.overflowY = "visible";
+  }
+
+  // 2) Align all sibling cells to the top and allow them to grow
+  const kids = Array.from(row.children);
+  if (disp === "flex" || disp === "inline-flex") {
+    // Align row’s cross-axis to top; keep nowrap so columns stay in one line
+    row.style.alignItems = "flex-start";
+    row.style.flexWrap = "nowrap";
+    kids.forEach(ch => {
+      ch.style.alignSelf = "flex-start";
+      ch.style.minHeight = "0";
+      ch.style.minWidth = "0";
+      ch.style.overflow = "visible";
+      // let text wrap only where ruby is (we already set white-space in CSS for the ruby cell)
+    });
+  } else if (disp === "grid" || disp === "inline-grid") {
+    row.style.alignItems = "start";
+    kids.forEach(ch => {
+      ch.style.alignSelf = "start";
+      ch.style.minHeight = "0";
+      ch.style.minWidth = "0";
+      ch.style.overflow = "visible";
+    });
+    // If author used fixed grid-auto-rows, let the row size to content
+    if (cs.gridAutoRows && cs.gridAutoRows !== "auto") {
+      row.style.gridAutoRows = "auto";
+    }
+  } else if (row.tagName === "TR") {
+    kids.forEach(ch => { ch.style.verticalAlign = "top"; });
+  }
+
+  // 3) If the “badge” (first column) is wrapping, clamp it; date stays single line.
+  //    This keeps the three columns visually aligned.
+  const first = kids[0], last = kids[kids.length - 1];
+  if (first && first !== wrapper) {
+    first.style.whiteSpace = "nowrap";
+    first.style.textOverflow = "ellipsis";
+    first.style.overflow = "hidden";
+    // limit to a reasonable width so the title column has room
+    if (!first.style.maxWidth) first.style.maxWidth = "12ch";
+  }
+  if (last) {
+    last.style.whiteSpace = "nowrap";
+  }
+}
+
+
+function findImmediateItem(node, containerEl) {
+  // We want the first non-display:contents ancestor inside the container
+  let el = node.parentElement;
+  while (el && el !== containerEl) {
+    const cs = getComputedStyle(el);
+    if (cs.display !== "contents") return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function tryGridRowSpan(gridEl, wrapper) {
+  const cs = getComputedStyle(gridEl);
+  const autoRows = cs.gridAutoRows; // e.g. "12px" or "auto"
+  if (!autoRows || autoRows === "auto") return;
+
+  const rowSize = parseFloat(autoRows);
+  if (!rowSize || !Number.isFinite(rowSize)) return;
+
+  const rowGap = parseFloat(cs.rowGap) || 0;
+
+  // Measure the grid item’s rendered height
+  const item = findImmediateItem(wrapper, gridEl) || wrapper;
+  // Force a reflow after ruby inject
+  const h = item.getBoundingClientRect().height;
+
+  // Classic masonry span calculation
+  const spans = Math.max(1, Math.ceil((h + rowGap) / (rowSize + rowGap)));
+  item.style.gridRowEnd = `span ${spans}`;
+}
+
 
 
 // ---- helpers: consume site english ----
@@ -468,6 +724,7 @@ function applyTranslations(nodes, translations) {
       if (!ORIGINALS.has(n)) {
         ORIGINALS.set(n, { text: n.nodeValue, parent: n.parentNode, nextSibling: n.nextSibling, wrapper: null });
       }
+      if (n.parentElement) n.parentElement.setAttribute("data-ct", "1");
       n.nodeValue = translations[i];
       TOUCHED.add(n);
     } catch {}
@@ -638,6 +895,135 @@ function ensurePinyinStyles() {
     max-width: 100%;
     white-space: normal;
   }
+
+    /* === Adaptive layout helpers (only where ruby exists) === */
+
+  /* Let pinyin/English wrap instead of overflowing */
+  .ct-ruby-block {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    white-space: normal;
+    vertical-align: baseline;
+  }
+
+/* Only the direct parent of our wrapper, and never headers/nav/footers */
+*:has(> .ct-ruby-block):not(header):not(nav):not(footer)
+{
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Flex: only the element whose direct child is the ruby wrapper */
+*:has(> .ct-ruby-block):not(header):not(nav):not(footer)[style*="display:flex"],
+*:has(> .ct-ruby-block):not(header):not(nav):not(footer)[class*="flex"]
+{
+  align-items: stretch;
+  overflow: visible;
+}
+
+/* Grid: only the element whose direct child is the ruby wrapper */
+*:has(> .ct-ruby-block):not(header):not(nav):not(footer)[style*="display:grid"],
+*:has(> .ct-ruby-block):not(header):not(nav):not(footer)[class*="grid"]
+{
+  overflow: visible;
+}
+
+/* Rows that contain our ruby: keep columns aligned */
+tr:has(.ct-ruby-block) > th,
+tr:has(.ct-ruby-block) > td {
+  vertical-align: top;
+}
+
+/* FIRST column (red unit badge): keep it single-line & clipped
+   so it doesn't push or break row alignment */
+tr:has(.ct-ruby-block) > th:first-child,
+tr:has(.ct-ruby-block) > td:first-child,
+li:has(.ct-ruby-block) > *:first-child {
+  max-width: 12ch;                 /* narrow badge column; tweak if needed */
+  white-space: nowrap !important;  /* never wrap here */
+  overflow: hidden !important;     /* clip extra */
+  text-overflow: ellipsis !important;
+}
+
+/* MIDDLE column (title): may wrap normally */
+td:has(.ct-ruby-block),
+th:has(.ct-ruby-block) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* LAST column (date/short code): keep it single-line */
+tr:has(.ct-ruby-block) > th:last-child,
+tr:has(.ct-ruby-block) > td:last-child,
+tr:has(.ct-ruby-block) time {
+  white-space: nowrap !important;
+}
+/* === Content lists (NOT navs): keep one-line columns; grow li height if needed === */
+ul:not(.nav-cont):not(.menu):not(.navbar):not(.nav) > li:has(.ct-ruby-block) {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+ul:not(.nav-cont):not(.menu):not(.navbar):not(.nav) > li:has(.ct-ruby-block) > *:first-child {
+  flex: 0 0 auto;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 12ch;
+}
+
+ul:not(.nav-cont):not(.menu):not(.navbar):not(.nav) > li:has(.ct-ruby-block) > *:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+ul:not(.nav-cont):not(.menu):not(.navbar):not(.nav) > li:has(.ct-ruby-block) > *:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* === NAV BARS (bicmr.nav) — do NOT convert <li> to flex; keep items single-line === */
+.nav-cont li:has(.ct-ruby-block),
+.nav li:has(.ct-ruby-block),
+.menu li:has(.ct-ruby-block),
+.navbar li:has(.ct-ruby-block) {
+  display: block;                 /* restore default */
+}
+
+.nav-cont li:has(.ct-ruby-block) > a,
+.nav li:has(.ct-ruby-block) > a,
+.menu li:has(.ct-ruby-block) > a,
+.navbar li:has(.ct-ruby-block) > a {
+  display: inline-block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 12ch;                /* keep nav labels compact */
+}
+
+/* Nav: hide sentence-level English to avoid tall items */
+.nav-cont li .ct-sentence-en,
+.nav li .ct-sentence-en,
+.menu li .ct-sentence-en,
+.navbar li .ct-sentence-en {
+  display: none !important;
+}
+
+
+
+  /* Translate-mode: make marked parents wrap long translations */
+  [data-ct="1"] {
+    overflow-wrap: anywhere;
+    word-break: break-word; /* older sites */
+  }
+
   `;
 
   const el = document.createElement("style");
