@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Translation and Pinyin+English annotation toolbox.",
+  "name": "Translate and Pinyin toolbox",
   "version": "0.2.0",
   "description": "Multi-use toolbox for language translation, pinyin/pinyin+english annotation in Chinese websites. Useful to both translate websites for common use and learn Chinese.",
   "permissions": ["storage", "scripting", "activeTab", "tabs"],
