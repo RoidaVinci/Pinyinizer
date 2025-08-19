@@ -1,54 +1,104 @@
 document.addEventListener("DOMContentLoaded", async () => {
+  // Toggles
   const enabled = document.querySelector("#enabled");
   const toggleRow = document.querySelector("#toggleRow");
+  const modeSwitch = document.querySelector("#modeSwitch");
+  const modeRow = document.querySelector("#modeRow");
+  const englishToggle = document.querySelector("#annotateShowEnglish");
+  const englishRow = document.querySelector("#englishRow");
 
-  const modeTranslate = document.querySelector("#modeTranslate");
-  const modePinyin = document.querySelector("#modePinyin");
-  const pinyinSection = document.querySelector("#pinyinSection");
+  // Sections
   const translateSection = document.querySelector("#translateSection");
-  const annotateShowEnglish = document.querySelector("#annotateShowEnglish");
+  const pinyinSection = document.querySelector("#pinyinSection");
 
+  // Pinyin sliders
   const hanziScale = document.querySelector("#hanziScale");
   const pinyinScale = document.querySelector("#pinyinScale");
   const hanziScaleVal = document.querySelector("#hanziScaleVal");
   const pinyinScaleVal = document.querySelector("#pinyinScaleVal");
 
-  const targetLangs = document.querySelector("#targetLangs");
-  const sourceLang = document.querySelector("#sourceLang");
-  const excludeLangs = document.querySelector("#excludeLangs");
+  // Language controls
+  const sourceLangSelect = document.querySelector("#sourceLangSelect");
+  const targetSelect = document.querySelector("#targetSelect");
+  const targetChips = document.querySelector("#targetChips");
+  const excludeSelect = document.querySelector("#excludeSelect");
+  const excludeChips = document.querySelector("#excludeChips");
 
+  // Buttons
+  const applyBtn = document.querySelector("#apply");
+  const undoBtn = document.querySelector("#undo");
+
+  const LANGS = ["auto", "zh", "es", "en"]; // closed list
+
+  // Load settings
   const prev = await send("CT_GET_SETTINGS");
 
-  (prev.mode === "pinyin" ? modePinyin : modeTranslate).checked = true;
-  toggleSections(prev.mode);
+  // Enabled state
+  enabled.checked = !!prev.enabled;
+  reflectToggleUI(toggleRow, enabled.checked);
 
-  annotateShowEnglish.checked = !!prev.annotate?.showEnglish;
+  // Mode switch — checked = Pinyin, unchecked = Translate
+  const initialIsPinyin = prev.mode === "pinyin";
+  modeSwitch.checked = initialIsPinyin;
+  reflectToggleUI(modeRow, modeSwitch.checked);
+  toggleSections(modeSwitch.checked ? "pinyin" : "translate");
 
+  // Show English toggle (Pinyin mode)
+  englishToggle.checked = !!prev.annotate?.showEnglish;
+  reflectToggleUI(englishRow, englishToggle.checked);
+
+  // Pinyin scales
   const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
   const sPinyin = clampNum(prev.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
-  hanziScale.value = sHanzi;
-  pinyinScale.value = sPinyin;
-  hanziScaleVal.textContent = sHanzi.toFixed(2);
-  pinyinScaleVal.textContent = sPinyin.toFixed(2);
-
+  hanziScale.value = sHanzi; hanziScaleVal.textContent = sHanzi.toFixed(2);
+  pinyinScale.value = sPinyin; pinyinScaleVal.textContent = sPinyin.toFixed(2);
   hanziScale.addEventListener("input", () => hanziScaleVal.textContent = (+hanziScale.value).toFixed(2));
   pinyinScale.addEventListener("input", () => pinyinScaleVal.textContent = (+pinyinScale.value).toFixed(2));
 
-  enabled.checked = !!prev.enabled;
-  reflectToggleUI();
+  // Source (single)
+  sourceLangSelect.value = LANGS.includes(prev.sourceLang || "") ? (prev.sourceLang || "auto") : "auto";
 
-  targetLangs.value = (prev.targetLangs || ["es", "en"]).join(", ");
-  if (sourceLang) sourceLang.value = prev.sourceLang || "auto";
-  excludeLangs.value = (prev.excludeLangs || ["en", "es"]).join(", ");
+  // Target (multi chips)
+  let targetLangs = sanitizeLangList(prev.targetLangs?.length ? prev.targetLangs : ["es", "en"]);
+  renderChips(targetChips, targetLangs, (lang) => {
+    targetLangs = targetLangs.filter(l => l !== lang);
+    renderChips(targetChips, targetLangs, this);
+  });
+  targetSelect.addEventListener("change", () => {
+    const val = targetSelect.value;
+    if (val && !targetLangs.includes(val)) {
+      targetLangs.push(val);
+      renderChips(targetChips, targetLangs, (lang) => {
+        targetLangs = targetLangs.filter(l => l !== lang);
+        renderChips(targetChips, targetLangs, this);
+      });
+    }
+    targetSelect.selectedIndex = 0; // reset to placeholder
+  });
 
-  modeTranslate.addEventListener("change", () => toggleSections("translate"));
-  modePinyin.addEventListener("change", () => toggleSections("pinyin"));
+  // Exclude (multi chips)
+  let excludeLangs = sanitizeLangList(prev.excludeLangs?.length ? prev.excludeLangs : ["en", "es"]);
+  renderChips(excludeChips, excludeLangs, (lang) => {
+    excludeLangs = excludeLangs.filter(l => l !== lang);
+    renderChips(excludeChips, excludeLangs, this);
+  });
+  excludeSelect.addEventListener("change", () => {
+    const val = excludeSelect.value;
+    if (val && !excludeLangs.includes(val)) {
+      excludeLangs.push(val);
+      renderChips(excludeChips, excludeLangs, (lang) => {
+        excludeLangs = excludeLangs.filter(l => l !== lang);
+        renderChips(excludeChips, excludeLangs, this);
+      });
+    }
+    excludeSelect.selectedIndex = 0;
+  });
 
-  // Only OFF auto-applies; ON just saves state (no auto run)
+  // Behavior: ONLY Off auto-applies; On just saves state
   enabled.addEventListener("change", async () => {
     const nextSettings = { ...prev, enabled: enabled.checked };
-    prev.enabled = enabled.checked; // keep snapshot aligned
-    reflectToggleUI();
+    prev.enabled = enabled.checked;
+    reflectToggleUI(toggleRow, enabled.checked);
 
     await send("CT_SET_SETTINGS", nextSettings);
     if (!enabled.checked) {
@@ -57,27 +107,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  document.querySelector("#apply").addEventListener("click", async () => {
+  // Mode switch: just flips between translate/pinyin sections now; applied on Apply
+  modeSwitch.addEventListener("change", () => {
+    reflectToggleUI(modeRow, modeSwitch.checked);
+    toggleSections(modeSwitch.checked ? "pinyin" : "translate");
+  });
+
+  englishToggle.addEventListener("change", () => {
+    reflectToggleUI(englishRow, englishToggle.checked);
+  });
+
+  applyBtn.addEventListener("click", async () => {
     const next = {
-      mode: modePinyin.checked ? "pinyin" : "translate",
+      mode: modeSwitch.checked ? "pinyin" : "translate",
       pinyinProvider: prev.pinyinProvider || "pinyin_pro_local",
       annotate: {
         ...(prev.annotate || {}),
-        showEnglish: annotateShowEnglish.checked,
+        showEnglish: englishToggle.checked,
         hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
         pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2)
       },
       enabled: enabled.checked,
-      targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
-      sourceLang: sourceLang ? (sourceLang.value || "auto").trim() : prev.sourceLang,
-      excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean)
+      targetLangs: targetLangs,
+      sourceLang: sourceLangSelect.value || "auto",
+      excludeLangs: excludeLangs
     };
     await send("CT_SET_SETTINGS", next);
     await sendToActiveTab("CT_APPLY_NOW");
     window.close();
   });
 
-  document.querySelector("#undo").addEventListener("click", async () => {
+  undoBtn.addEventListener("click", async () => {
     await sendToActiveTab("CT_UNDO");
     window.close();
   });
@@ -87,14 +147,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     pinyinSection.hidden = !isPinyin;
     translateSection.hidden = isPinyin;
   }
-
-  function reflectToggleUI() {
-    if (!toggleRow) return;
-    toggleRow.classList.toggle("is-on", !!enabled.checked);
-  }
 });
 
-/* existing helpers remain unchanged */
+/* ---------- helpers ---------- */
+
+function reflectToggleUI(rowEl, isOn) {
+  if (!rowEl) return;
+  rowEl.classList.toggle("is-on", !!isOn);
+}
+
+function sanitizeLangList(arr) {
+  const allow = new Set(["auto","zh","es","en"]);
+  const out = [];
+  (arr || []).forEach(l => {
+    const v = String(l || "").trim();
+    if (allow.has(v) && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+
+function renderChips(container, values, onRemove) {
+  container.innerHTML = "";
+  values.forEach(v => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = v;
+    const x = document.createElement("span");
+    x.className = "x";
+    x.textContent = "×";
+    x.addEventListener("click", () => {
+      if (typeof onRemove === "function") onRemove(v);
+      else {
+        const rest = values.filter(l => l !== v);
+        renderChips(container, rest, onRemove);
+      }
+    });
+    chip.appendChild(x);
+    container.appendChild(chip);
+  });
+}
+
 function send(type, payload) {
   return new Promise((resolve) =>
     chrome.runtime.sendMessage({ type, payload }, resolve)
@@ -102,6 +194,7 @@ function send(type, payload) {
 }
 const clampNum = (n, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));
 
+/** Robustly send a message to the active tab's content script. */
 async function sendToActiveTab(type, payload) {
   const tab = await getActiveTab();
   if (!tab?.id) return false;

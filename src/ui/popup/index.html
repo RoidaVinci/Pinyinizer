@@ -7,55 +7,90 @@
 </head>
 <body>
   <main>
-  <!-- Global On/Off (centered, elegant) -->
-  <div class="toggle-row" id="toggleRow">
-    <span class="toggle-label off">Off</span>
-    <label class="switch" aria-label="Enable extension">
-      <input id="enabled" type="checkbox" role="switch" />
-      <span class="slider"></span>
-    </label>
-    <span class="toggle-label on">On</span>
-  </div>
 
-    <fieldset>
-      <legend>Mode</legend>
-      <label><input type="radio" name="mode" value="translate" id="modeTranslate" /> Translate</label>
-      <label><input type="radio" name="mode" value="pinyin" id="modePinyin" /> Pinyin</label>
-    </fieldset>
+    <!-- Global On/Off -->
+    <div class="toggle-row" id="toggleRow">
+      <span class="toggle-label off">Off</span>
+      <label class="switch" aria-label="Enable extension">
+        <input id="enabled" type="checkbox" role="switch" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label on">On</span>
+    </div>
+
+    <!-- Mode: Translate / Pinyin -->
+    <div class="toggle-row" id="modeRow">
+      <span class="toggle-label off">Translate</span>
+      <label class="switch" aria-label="Mode: Translate or Pinyin">
+        <input id="modeSwitch" type="checkbox" role="switch" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label on">Pinyin</span>
+    </div>
+
+    <!-- Translate-only -->
+    <section id="translateSection">
+      <div class="field">
+        <label class="field-label">Source</label>
+        <div class="select-wrap">
+          <select id="sourceLangSelect">
+            <option value="auto">auto</option>
+            <option value="zh">zh</option>
+            <option value="es">es</option>
+            <option value="en">en</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Target</label>
+        <div class="chips-row" id="targetChips"></div>
+        <div class="select-wrap">
+          <select id="targetSelect">
+            <option value="" disabled selected>Add target…</option>
+            <option value="zh">zh</option>
+            <option value="es">es</option>
+            <option value="en">en</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Exclude</label>
+        <div class="chips-row" id="excludeChips"></div>
+        <div class="select-wrap">
+          <select id="excludeSelect">
+            <option value="" disabled selected>Add exclude…</option>
+            <option value="zh">zh</option>
+            <option value="es">es</option>
+            <option value="en">en</option>
+          </select>
+        </div>
+      </div>
+    </section>
 
     <!-- Pinyin-only -->
-    <section id="pinyinSection">
-      <label style="margin-bottom:16px;">
-        <span>Also show English</span>
-        <input id="annotateShowEnglish" type="checkbox" />
-      </label>
+    <section id="pinyinSection" hidden>
+      <!-- Show English toggle -->
+      <div class="toggle-row" id="englishRow">
+        <span class="toggle-label off">Hide English</span>
+        <label class="switch" aria-label="Show English">
+          <input id="annotateShowEnglish" type="checkbox" role="switch" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label on">Show English</span>
+      </div>
 
-      <!-- NEW: scales (apply when English is NOT shown) -->
-      <label class="stack" style="margin-bottom:16px;">
+      <!-- (Keep your existing sliders; they remain here and work the same) -->
+      <label class="stack" style="margin-bottom:12px;">
         <span>Hanzi scale (no English)</span>
         <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="hanziScaleVal"></code></small>
       </label>
-      <label class="stack" style="margin-bottom:16px;">
+      <label class="stack" style="margin-bottom:12px;">
         <span>Pinyin scale (no English)</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
-      </label>
-    </section>
-
-    <!-- Translate-only -->
-    <section id="translateSection">
-      <label style="margin-bottom:16px;">
-        <span>Source</span>
-        <input id="sourceLang" placeholder="auto or zh" />
-      </label>
-      <label style="margin-bottom:16px;">
-        <span>Target order</span>
-        <input id="targetLangs" placeholder="es, en" />
-      </label>
-      <label style="margin-bottom:16px;">
-        <span>Exclude</span>
-        <input id="excludeLangs" placeholder="en, es" />
       </label>
     </section>
 
