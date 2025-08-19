@@ -45,18 +45,15 @@ let IS_MUTATING = false;
 
     // Let BFCache restore settle, then check if ruby already present
     await raf2();
-
     if (currentSettings.mode === "pinyin") {
-      if (hasPinyinDecorations(document)) {
-        // Already annotated (BFCache/previous run) → do nothing
-      } else {
-        const did = await annotateTreeWithLock(document.body);
-        if (did) disconnectMo = startMutationObserver(handleMutations);
+      if (!disconnectMo) disconnectMo = startMutationObserver(handleMutations);
+      if (!hasPinyinDecorations(document)) {
+        await annotateTreeWithLock(document.body);
       }
     } else {
       const did = await translateTree(document.body);
-      if (did) disconnectMo = startMutationObserver(handleMutations);
-    }
+      // Also observe in translate mode even if initial pass had nothing
+      if (!disconnectMo) disconnectMo = startMutationObserver(handleMutations);    }
 
     // In pinyin mode we don’t re-run on SPA events; MO handles incremental DOM
     addEventListener("popstate", () => {
@@ -74,11 +71,17 @@ let IS_MUTATING = false;
           revertTranslations();
           disconnectMo?.();
           await raf();
+          // Ensure stale flags never block a new pinyin pass
+          try {
+            const html = document.documentElement;
+            html.removeAttribute("data-ct-pinyin-applied");
+            html.removeAttribute("data-ct-pinyin-pending");
+          } catch {}
           const again = currentSettings.mode === "pinyin"
-            ? (!hasPinyinDecorations(document) && await annotateTreeWithLock(document.body))
-            : await translateTree(document.body);
-          if (again) disconnectMo = startMutationObserver(handleMutations);
-        })();
+          ? (await annotateTreeWithLock(document.body), true)
+          : (await translateTree(document.body), true);
+          if (!disconnectMo) disconnectMo = startMutationObserver(handleMutations);
+   })();
       }
       if (msg?.type === "CT_UNDO") {
         revertTranslations();
@@ -178,9 +181,14 @@ async function annotateTreeWithLock(root) {
 async function annotateTree(root) {
   const html = document.documentElement;
 
-  // Attribute lock (works across isolated worlds) — set BEFORE any await.
-  if (html.getAttribute("data-ct-pinyin-applied") === "1") return false;
-  if (html.hasAttribute("data-ct-pinyin-pending")) return false;
+    // Attribute lock (works across isolated worlds) — set BEFORE any await.
+    if (html.getAttribute("data-ct-pinyin-applied") === "1") return false;
+    if (html.hasAttribute("data-ct-pinyin-pending")) {
+    // If a previous run hung, allow retry after 5 seconds
+    const ts = +html.getAttribute("data-ct-pinyin-pending") || 0;
+    if (Date.now() - ts < 5000) return false;
+    html.removeAttribute("data-ct-pinyin-pending");
+  }
   html.setAttribute("data-ct-pinyin-pending", String(Date.now()));
 
   try {
@@ -475,36 +483,43 @@ function revertTranslations() {
   });
   ORIGINALS.clear();
   TOUCHED = new WeakSet();
+    try {
+    const html = document.documentElement;
+    html.removeAttribute("data-ct-pinyin-applied");
+    html.removeAttribute("data-ct-pinyin-pending");
+  } catch {}
 }
+
+let pendingNodes = new Set();
+let flushTimer = null;
 
 function startMutationObserver(onTextNodes) {
   const mo = new MutationObserver((muts) => {
     if (IS_MUTATING) return;
-
-    const targets = [];
     for (const m of muts) {
       if (m.type === "childList") {
         m.addedNodes.forEach((n) => {
-          if (n.nodeType === 3 && !shouldSkipTextNode(n)) {
-            targets.push(n);
-          } else if (n.nodeType === 1) {
-            collectTextNodes(n).forEach((t) => targets.push(t));
-          }
+          if (n.nodeType === 3 && !shouldSkipTextNode(n)) pendingNodes.add(n);
+          else if (n.nodeType === 1) collectTextNodes(n).forEach((t) => pendingNodes.add(t));
         });
       } else if (m.type === "characterData") {
         const n = m.target;
-        if (!shouldSkipTextNode(n)) targets.push(n);
+        if (!shouldSkipTextNode(n)) pendingNodes.add(n);
       }
     }
-    if (targets.length) onTextNodes(targets);
+    if (!flushTimer) {
+      flushTimer = setTimeout(() => {
+        const arr = Array.from(pendingNodes);
+        pendingNodes.clear();
+        flushTimer = null;
+        if (arr.length) onTextNodes(arr);
+      }, 50);
+    }
   });
-  mo.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-  });
+  mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   return () => mo.disconnect();
 }
+
 
 // ---- messaging ----
 function translateRequest(texts, opts = {}) {
