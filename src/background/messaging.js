@@ -51,7 +51,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await setSettings(msg.payload || {});
       try {
         const s = await getSettings();
-        chrome.action.setBadgeText({ text: s.mode === "pinyin" ? "PY" : "" });
+        chrome.action.setBadgeText({ text: s.mode === "pinyin" ? "PY" : "TR" });
       } catch {}
       sendResponse({ ok: true });
       return;
