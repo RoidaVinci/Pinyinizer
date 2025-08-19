@@ -7,6 +7,16 @@
 </head>
 <body>
   <main>
+  <!-- Global On/Off (centered, elegant) -->
+  <div class="toggle-row" id="toggleRow">
+    <span class="toggle-label off">Off</span>
+    <label class="switch" aria-label="Enable extension">
+      <input id="enabled" type="checkbox" role="switch" />
+      <span class="slider"></span>
+    </label>
+    <span class="toggle-label on">On</span>
+  </div>
+
     <fieldset>
       <legend>Mode</legend>
       <label><input type="radio" name="mode" value="translate" id="modeTranslate" /> Translate</label>
@@ -35,10 +45,6 @@
 
     <!-- Translate-only -->
     <section id="translateSection">
-      <label style="margin-bottom:16px;">
-        <span>Enabled</span>
-        <input id="enabled" type="checkbox" />
-      </label>
       <label style="margin-bottom:16px;">
         <span>Source</span>
         <input id="sourceLang" placeholder="auto or zh" />

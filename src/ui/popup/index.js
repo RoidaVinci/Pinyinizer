@@ -1,5 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const enabled = document.querySelector("#enabled");
+  const toggleRow = document.querySelector("#toggleRow");
+
   const modeTranslate = document.querySelector("#modeTranslate");
   const modePinyin = document.querySelector("#modePinyin");
   const pinyinSection = document.querySelector("#pinyinSection");
@@ -22,7 +24,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   annotateShowEnglish.checked = !!prev.annotate?.showEnglish;
 
-  // NEW — load scales
   const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
   const sPinyin = clampNum(prev.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
   hanziScale.value = sHanzi;
@@ -34,12 +35,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   pinyinScale.addEventListener("input", () => pinyinScaleVal.textContent = (+pinyinScale.value).toFixed(2));
 
   enabled.checked = !!prev.enabled;
+  reflectToggleUI();
+
   targetLangs.value = (prev.targetLangs || ["es", "en"]).join(", ");
   if (sourceLang) sourceLang.value = prev.sourceLang || "auto";
   excludeLangs.value = (prev.excludeLangs || ["en", "es"]).join(", ");
 
   modeTranslate.addEventListener("change", () => toggleSections("translate"));
   modePinyin.addEventListener("change", () => toggleSections("pinyin"));
+
+  // Only OFF auto-applies; ON just saves state (no auto run)
+  enabled.addEventListener("change", async () => {
+    const nextSettings = { ...prev, enabled: enabled.checked };
+    prev.enabled = enabled.checked; // keep snapshot aligned
+    reflectToggleUI();
+
+    await send("CT_SET_SETTINGS", nextSettings);
+    if (!enabled.checked) {
+      await sendToActiveTab("CT_APPLY_NOW");
+      window.close();
+    }
+  });
 
   document.querySelector("#apply").addEventListener("click", async () => {
     const next = {
@@ -57,14 +73,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean)
     };
     await send("CT_SET_SETTINGS", next);
-
-    // RELIABLE apply: message with retries; inject if needed.
     await sendToActiveTab("CT_APPLY_NOW");
     window.close();
   });
 
   document.querySelector("#undo").addEventListener("click", async () => {
-    // RELIABLE undo: message with retries; inject if needed.
     await sendToActiveTab("CT_UNDO");
     window.close();
   });
@@ -74,8 +87,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     pinyinSection.hidden = !isPinyin;
     translateSection.hidden = isPinyin;
   }
+
+  function reflectToggleUI() {
+    if (!toggleRow) return;
+    toggleRow.classList.toggle("is-on", !!enabled.checked);
+  }
 });
 
+/* existing helpers remain unchanged */
 function send(type, payload) {
   return new Promise((resolve) =>
     chrome.runtime.sendMessage({ type, payload }, resolve)
@@ -83,29 +102,21 @@ function send(type, payload) {
 }
 const clampNum = (n, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));
 
-/** Robustly send a message to the active tab's content script.
- *  - Retries a few times (service worker/content script wake-ups).
- *  - If failing, injects the content script and tries once more.
- */
 async function sendToActiveTab(type, payload) {
   const tab = await getActiveTab();
   if (!tab?.id) return false;
 
-  // Try up to 3 times quickly
   for (let attempt = 0; attempt < 3; attempt++) {
     const ok = await trySend(tab.id, { type, payload });
     if (ok) return true;
     await delay(150 * (attempt + 1));
   }
-
-  // As a last resort, inject the content script (all frames) and retry once
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
       files: ["src/content/index.js"],
     });
-  } catch (_) { /* ignore */ }
-
+  } catch (_) {}
   return await trySend(tab.id, { type, payload });
 }
 
@@ -114,7 +125,6 @@ function getActiveTab() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0]));
   });
 }
-
 function trySend(tabId, msg) {
   return new Promise((resolve) => {
     try {
@@ -122,10 +132,7 @@ function trySend(tabId, msg) {
         const err = chrome.runtime.lastError;
         resolve(!err);
       });
-    } catch (_) {
-      resolve(false);
-    }
+    } catch (_) { resolve(false); }
   });
 }
-
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
