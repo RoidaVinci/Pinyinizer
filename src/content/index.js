@@ -208,6 +208,7 @@ async function annotateTree(root) {
     return false;
   }
 }
+
 async function annotateNodes(nodes) {
   // 1) Collect Han runs per node + unique runs + unique characters
   const nodeRuns = [];
@@ -246,10 +247,14 @@ async function annotateNodes(nodes) {
   } catch {}
   const charPyMap = new Map(uniqChars.map((u, i) => [u, charPinyinArr[i] || ""]));
 
-  // 4) Optional English per run
+  // 4) Optional sentence-level English (ONE per node)
   const showEnglish = !!(currentSettings?.annotate && currentSettings.annotate.showEnglish);
-  let enMap = null;
-  if (showEnglish) enMap = await fetchEnglishMap(uniqRuns);
+  // Build a "sentence key" for each node: concatenate its Han runs
+  const sentenceKeys = nodeRuns.map(runs => runs.length ? runs.map(r => r.han).join("") : "");
+  let sentenceEnMap = null;
+  if (showEnglish) {
+    sentenceEnMap = await fetchEnglishForSentences(sentenceKeys);
+  }
 
   // 5) Build wrappers; measure & downshift as needed
   IS_MUTATING = true;
@@ -297,19 +302,6 @@ async function annotateNodes(nodes) {
         }
 
         wrapper.appendChild(ruby);
-
-        // optional English (phrase-level)
-        if (showEnglish && enMap) {
-          const eng = (enMap.get(r.han) || "").trim();
-          if (eng) {
-            const enEl = document.createElement("span");
-            enEl.className = "ct-en";
-            enEl.textContent = `(${eng})`;
-            wrapper.appendChild(enEl);
-            hadEnglish = true;
-          }
-        }
-
         cursor = r.end + consumed;
       }
 
@@ -318,22 +310,41 @@ async function annotateNodes(nodes) {
         wrapper.append(document.createTextNode(txt.slice(cursor)));
       }
 
-      wrapper.setAttribute("data-has-en", hadEnglish ? "1" : "0");
+      // Append ONE English gloss for the whole sentence (if any)
+      if (showEnglish && sentenceEnMap) {
+        const key = sentenceKeys[i];
+        const en = (sentenceEnMap.get(key) || "").trim();
+        if (en) {
+          const enLine = document.createElement("span");
+          enLine.className = "ct-sentence-en";
+          enLine.textContent = `(${en})`;
+          wrapper.appendChild(enLine);
+          hadEnglish = true;
+        }
+      }
 
+      wrapper.setAttribute("data-has-en", hadEnglish ? "1" : "0");
 
       if (!replaceTextNode(node, wrapper)) {
         // If the node vanished during processing, just skip this one.
         return;
+      }
+
+      // Optional local downshift if wrapper grows too tall
+      const rbox = wrapper.getBoundingClientRect();
+      const fontSize = parseFloat(getComputedStyle(wrapper).fontSize) || 16;
+      if (rbox.height > 1.6 * fontSize) {
+        const baseH = currentSettings?.annotate?.hanziScale ?? 0.90;
+        const baseP = currentSettings?.annotate?.pinyinScale ?? 0.53;
+        wrapper.style.setProperty('--ct-hanzi', (baseH * 0.9) + 'em');
+        wrapper.style.setProperty('--ct-pinyin', (baseP * 0.9) + 'em');
       }
     });
   } finally {
     IS_MUTATING = false;
   }
 
-  // 6) Clean tiny latin-only siblings the site might add
-  for (const n of nodes) stripFollowingLatinSiblings(n, { maxNodes: 2, maxChars: 140 });
-
-  console.log(`[CT] annotated ${nodes.length} nodes (hybrid + adaptive layout)`);
+  console.log(`[CT] annotated ${nodes.length} nodes (sentence-level English)`);
 }
 
 
@@ -381,43 +392,10 @@ function consumePlainLatinSuffix(full, pos) {
   return m[0].length;
 }
 
-function stripFollowingLatinSiblings(textNode, { maxNodes = 2, maxChars = 140 } = {}) {
-  let sib = textNode.nextSibling;
-  let count = 0;
-  while (sib && count < maxNodes) {
-    if (sib.nodeType === Node.TEXT_NODE) {
-      const s = (sib.nodeValue || "").trim();
-      if (s && s.length <= maxChars && /[A-Za-z]/.test(s) && !/\p{Script=Han}/u.test(s)) {
-        try { sib.nodeValue = ""; } catch {}
-      } else break;
-      count++;
-      sib = sib.nextSibling;
-      continue;
-    }
-    if (sib.nodeType === Node.ELEMENT_NODE) {
-      const text = (sib.textContent || "").trim();
-      if (text && text.length <= maxChars && /[A-Za-z]/.test(text) && !/\p{Script=Han}/u.test(text)) {
-        if (!sib.firstElementChild) {
-          try { sib.textContent = ""; } catch {}
-          count++;
-          sib = sib.nextSibling;
-          continue;
-        }
-      }
-      break;
-    }
-    sib = sib.nextSibling;
-  }
-}
-
 // ---- DOM filters ----
-function isLatinNoHan(s) {
-  if (!s) return false;
-  return /[A-Za-z]/.test(s) && !/\p{Script=Han}/u.test(s);
-}
-
 function shouldSkipTextNode(node) {
   if (!node || node.nodeType !== Node.TEXT_NODE) return true;
+
   if (TOUCHED.has(node)) return true;
 
   const el = node.parentElement;
@@ -544,66 +522,68 @@ function ensurePinyinStyles() {
   const hanziScaleNoEn  = currentSettings?.annotate?.hanziScale ?? 0.90;
   const pinyinScaleNoEn = currentSettings?.annotate?.pinyinScale ?? 0.53;
 
-  // With-English scales (keep fixed unless you also add UI controls)
+  // With-English scales (keep same base by default)
   const hanziScaleWithEn  = hanziScaleNoEn;
   const pinyinScaleWithEn = pinyinScaleNoEn;
-  const englishScale      = pinyinScaleNoEn*0.8;
+  const englishScale      = pinyinScaleNoEn * 0.8;
 
   const css = `
   .ct-ruby { 
     ruby-position: under;
     ruby-align: center;
     white-space: normal;
+    line-height: 1;            /* prevent ruby from ballooning */
   }
   .ct-ruby rb, .ct-ruby rt { white-space: pre; }
+  .ct-ruby rt { line-height: 1; }
 
   /* No-English sizing (uses user settings) */
   .ct-ruby-block[data-has-en="0"] .ct-ruby rb { 
-    font-size: ${hanziScaleNoEn}em; 
+    font-size: var(--ct-hanzi, ${hanziScaleNoEn}em); 
     letter-spacing: 0.05em;
   }
   .ct-ruby-block[data-has-en="0"] .ct-ruby rt { 
-    font-size: ${pinyinScaleNoEn}em; 
+    font-size: var(--ct-pinyin, ${pinyinScaleNoEn}em); 
     line-height: 1.1; 
     color: #555; 
   }
 
-  /* With-English sizing (fixed) */
+  /* With-English sizing (same base unless tweaked) */
   .ct-ruby-block[data-has-en="1"] .ct-ruby rb { 
-    font-size: ${hanziScaleWithEn}em; 
+    font-size: var(--ct-hanzi, ${hanziScaleWithEn}em); 
     letter-spacing: 0.05em;
   }
   .ct-ruby-block[data-has-en="1"] .ct-ruby rt { 
-    font-size: ${pinyinScaleWithEn}em; 
+    font-size: var(--ct-pinyin, ${pinyinScaleWithEn}em); 
     line-height: 1.1; 
     color: #555; 
   }
-  .ct-ruby-block .ct-en {
-    display: inline-block;
+
+  /* Sentence-level English line (one per wrapper) */
+  .ct-ruby-block .ct-sentence-en {
+    display: block;
     margin-top: 0.1em;
     font-size: ${englishScale}em;
     line-height: 1.05;
     color: #666;
     font-style: italic;
     white-space: normal;
+    text-align: center;
+    width: 100%;
   }
 
+  /* Keep everything inline in normal flow to avoid layout explosions */
   .ct-ruby-block{
-    display: inline-block;     /* stays in normal inline flow */
-    vertical-align: baseline;  /* line box stays sane */
+    display: inline-block;     /* not inline-flex */
+    vertical-align: baseline;
     max-width: 100%;
     white-space: normal;
   }
-
-  `;
-
-  const extra = `
-
   `;
 
   const el = document.createElement("style");
   el.id = "ct-pinyin-styles";
-  el.textContent = css + extra;
+  el.textContent = css;
   document.documentElement.appendChild(el);
 }
 
@@ -618,36 +598,28 @@ function hasPinyinDecorations(root = document) {
 function raf() { return new Promise(r => requestAnimationFrame(r)); }
 async function raf2() { await raf(); await raf(); }
 
-// ---- English helpers for pinyin mode ----
-async function fetchEnglishMap(unique) {
-  const first = await requestEnglish(unique, "google_free");
-  const out = new Map();
+// ---- English helpers (sentence-level) for pinyin mode ----
+async function fetchEnglishForSentences(sentenceKeys) {
+  // Build uniq list but keep mapping back
+  const uniq = Array.from(new Set(sentenceKeys.filter(Boolean)));
+  if (!uniq.length) return new Map();
 
-  const retryIdx = [];
-  const retryArr = [];
-  unique.forEach((u, i) => {
-    const v = first[i] ?? "";
-    if (isLatinNoHan(v)) {
-      out.set(u, v);
-    } else {
-      retryIdx.push(i);
-      retryArr.push(u);
-    }
-  });
+  const primary = await requestEnglish(uniq, "google_free");
+  const map = new Map();
+  uniq.forEach((k, i) => map.set(k, primary[i] ?? ""));
 
-  if (retryArr.length) {
+  // Retry ones that didn't look English using HTTP provider
+  const needRetry = uniq.filter(k => !/[A-Za-z]/.test(map.get(k) || ""));
+  if (needRetry.length) {
     try {
-      const second = await requestEnglish(retryArr, "http");
-      retryIdx.forEach((origIdx, j) => {
-        const v = second[j] ?? "";
-        out.set(unique[origIdx], isLatinNoHan(v) ? v : "");
+      const second = await requestEnglish(needRetry, "http");
+      needRetry.forEach((k, i) => {
+        const v = second[i] ?? "";
+        if (/[A-Za-z]/.test(v)) map.set(k, v);
       });
-    } catch {
-      retryIdx.forEach((origIdx) => out.set(unique[origIdx], ""));
-    }
+    } catch {}
   }
-
-  return out;
+  return map;
 }
 
 async function requestEnglish(arr, provider) {
@@ -707,5 +679,3 @@ function syllabifyOrCharLookup(chars, pyPhrase, charPinyinMap) {
   // fallback to per-char map
   return chars.map(ch => charPinyinMap.get(ch) || "");
 }
-
-
