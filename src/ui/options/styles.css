@@ -1,19 +1,179 @@
-body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
-main { max-width: 720px; margin: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-label { display: flex; flex-direction: column; gap: 4px; }
-h1 { font-size: 20px; margin: 0 0 8px; }
-h2 { font-size: 16px; margin-top: 24px; }
-input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-button { padding: 8px 16px; border: none; border-radius: 4px; background: #0078d4; color: #fff; cursor: pointer; }
-.actions { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
-fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
-legend { padding: 0 6px; color: #666; }
+/* Page layout */
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f8f9fb; color: #1f2937; }
+main { max-width: 760px; margin: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 12px 0; color: #374151; }
 [hidden] { display: none !important; }
 
+/* Inputs / buttons */
+input, select { padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+button { padding: 10px 16px; border: none; border-radius: 8px; background: #0b74e0; color: #fff; font-weight: 700; cursor: pointer; }
+.actions { display: flex; gap: 12px; align-items: center; }
+#status { color: #059669; font-weight: 600; }
+
+/* Field blocks */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-size: 12px; color: #6b7280; }
+.select-wrap select { width: 100%; font-size: 13px; }
+
+/* Centered toggle rows: label | switch | label */
+.toggle-row {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) auto minmax(64px, 1fr); /* equal wings */
+  align-items: center;
+  justify-items: center;          /* centers the switch column */
+  column-gap: 12px;
+  width: 100%;
+  max-width: 420px;               /* keeps labels close to the switch */
+  margin: 6px auto;               /* <-- centers the whole row under the header */
+  user-select: none;
+}
+
+.toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  opacity: .6;
+  transition: color .18s ease, opacity .18s ease;
+  white-space: nowrap;            /* no wrapping, avoids shifting */
+}
+
+/* keep labels snug to the switch but not affecting centering */
+.toggle-row .toggle-label.off { justify-self: end; text-align: right; }
+.toggle-row .toggle-label.on  { justify-self: start; text-align: left; }
+
+/* active side emphasis */
+.toggle-row.is-on .toggle-label.on { color: #0b74e0; opacity: 1; }
+.toggle-row:not(.is-on) .toggle-label.off { color: #111827; opacity: 1; }
+
+/* Switch */
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 60px;
+  height: 28px;
+  align-items: center;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #d1d5db;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+  transition: background .18s ease;
+  cursor: pointer;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .18s ease;
+}
+.switch input:checked + .slider { background: #0b74e0; }
+.switch input:checked + .slider::before { transform: translateX(32px); }
+
+/* Chips */
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #e6f1fd;
+  color: #0b57d0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chip .x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(11,87,208,.12);
+  color: #0b57d0;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+.chip .x:hover { background: rgba(11,87,208,.22); }
+
+/* Footer credit */
 .footer-credit {
   margin-top: 6px;
   text-align: center;
   font-size: 11px;
-  color: #9ca3af;          /* gray-400 */
+  color: #9ca3af;
+  letter-spacing: .2px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px auto;       /* <-- centers horizontally */
+  max-width: 420px;        /* keep same width as toggles */
+  width: 100%;
+}
+
+.field span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  text-align: center;      /* label text centered */
+}
+
+.field input[type="range"],
+.field select {
+  width: 100%;
+}
+
+.field small {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;      /* little value centered too */
+}
+.actions {
+  display: flex;
+  justify-content: center;   /* center the Save button */
+  margin: 16px 0;
+}
+
+.actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #0b74e0;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.actions button:hover {
+  background: #095ab3;
+}
+
+.footer-credit {
+  margin-top: 8px;
+  text-align: center;        /* center the credit */
+  font-size: 11px;
+  color: #9ca3af;
   letter-spacing: .2px;
 }

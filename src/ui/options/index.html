@@ -8,62 +8,81 @@
 <body>
   <main>
     <h1>Clean Translate — Options</h1>
-    <label>
-      <span>Enabled</span>
-      <input id="enabled" type="checkbox" />
-    </label>
 
-    <fieldset>
-      <legend>Mode</legend>
-      <label><input type="radio" name="mode" value="translate" id="modeTranslate" /> Translate</label>
-      <label><input type="radio" name="mode" value="pinyin" id="modePinyin" /> Pinyin (Hanzi → Hanzi + pinyin)</label>
-    </fieldset>
+    <!-- Enabled -->
+    <div class="toggle-row" id="enabledRow">
+      <span class="toggle-label off">Off</span>
+      <label class="switch">
+        <input id="enabledSwitch" type="checkbox" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label on">On</span>
+    </div>
+
+    <!-- Mode -->
+    <div class="toggle-row" id="modeRow">
+      <span class="toggle-label off">Translate</span>
+      <label class="switch">
+        <input id="modeSwitch" type="checkbox" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label on">Pinyin</span>
+    </div>
 
     <!-- Pinyin-only options -->
     <section id="pinyinSection">
       <h2>Pinyin options</h2>
-      <label>
-        <span>Also show English (keep English after Hanzi)</span>
-        <input id="annotateShowEnglish" type="checkbox" />
-      </label>
-    <label class="stack" style="margin-bottom:16px;">
-    <span>Pinyin provider</span>
-    <select id="pinyinProvider">
-      <option value="pinyin_pro_local">Pinyin-pro (offline, faster)</option>
-      <option value="google_free">Google (free)</option>
-   </select>
-  </label>
 
-      <!-- NEW: scales for no-English layout -->
-      <label style="margin-bottom:16px;">
+      <div class="toggle-row" id="englishRow">
+        <span class="toggle-label off">Hide English</span>
+        <label class="switch">
+          <input id="annotateShowEnglish" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label on">Show English</span>
+      </div>
+
+      <div class="field">
+        <span>Pinyin provider</span>
+        <select id="pinyinProvider">
+          <option value="pinyin_pro_local">Pinyin-pro (offline, faster)</option>
+          <option value="google_free">Google (free)</option>
+        </select>
+      </div>
+
+      <div class="field">
         <span>Hanzi scale (no English)</span>
         <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="hanziScaleVal"></code></small>
-      </label>
-      <label style="margin-bottom:16px;">
+      </div>
+
+      <div class="field">
         <span>Pinyin scale (no English)</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
-      </label>
+      </div>
     </section>
 
     <!-- Translate-only options -->
     <section id="translateSection">
+      <h2>Translate options</h2>
 
-      <label style="margin-bottom:16px;">
-        <span>Target languages</span>
+      <div class="field">
+        <span>Target languages (comma separated)</span>
         <input id="targetLangs" placeholder="es, en" />
-      </label>
-      <label style="margin-bottom:16px;">
+      </div>
+
+      <div class="field">
         <span>Source language</span>
         <input id="sourceLang" placeholder="auto (or zh, en, ...)" />
-      </label>
-      <label style="margin-bottom:16px;">
+      </div>
+
+      <div class="field">
         <span>Exclude languages</span>
         <input id="excludeLangs" placeholder="en, es" />
-      </label>
+      </div>
 
-      <label>
+      <div class="field">
         <span>Provider</span>
         <select id="provider">
           <option value="mock">Mock (dev)</option>
@@ -71,23 +90,22 @@
           <option value="google_free">Google (free, no key)</option>
           <option value="nllb">NLLB (offline, safe)</option>
         </select>
-      </label>
+      </div>
 
-      <section>
-        <h2>Glossary</h2>
-        <label>
-          <span>Do Not Translate (comma separated)</span>
-          <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
-        </label>
-      </section>
+      <div class="field">
+        <span>Glossary — Do Not Translate (comma separated)</span>
+        <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
+      </div>
     </section>
 
     <div class="actions">
       <button id="save">Save</button>
-      <span id="status"></span>
     </div>
+    <div id="status"></div>
+
     <div class="footer-credit">by Roi Vence</div>
   </main>
+
   <script src="index.js"></script>
 </body>
 </html>
