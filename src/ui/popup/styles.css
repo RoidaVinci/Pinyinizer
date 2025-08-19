@@ -120,3 +120,39 @@ small { color: #6b7280; }
   line-height: 1;
 }
 .chip .x:hover { background: rgba(11,87,208,.22); }
+
+
+/* Bottom note */
+.help-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+}
+.hint-dot {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #e6f1fd;
+  color: #0b57d0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.footer-credit {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;          /* gray-400 */
+  letter-spacing: .2px;
+}

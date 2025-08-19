@@ -9,3 +9,11 @@ button { padding: 8px 16px; border: none; border-radius: 4px; background: #0078d
 fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
 legend { padding: 0 6px; color: #666; }
 [hidden] { display: none !important; }
+
+.footer-credit {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;          /* gray-400 */
+  letter-spacing: .2px;
+}
