@@ -1,6 +1,7 @@
 const DEFAULTS = {
   enabled: true,
   provider: "google_free",      // "mock" | "http"
+  pinyin_provider: "pinyin_pro_local", // "google_free" | "pinyin_pro_local"
   sourceLang: "zh",
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],

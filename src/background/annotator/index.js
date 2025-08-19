@@ -1,14 +1,16 @@
 import { fastHash } from "../../common/hash.js";
 import { getMany, setMany } from "../storage/cache.js";
 import { pinyinGoogleFree } from "./providers/google_pinyin_free.js";
+import { pinyinProLocal } from "./providers/pinyin_pro_local.js";
 
 const PROVIDERS = {
   google_free: pinyinGoogleFree,
+  pinyin_pro_local: pinyinProLocal,
 };
 
 export async function annotateBatch(texts, opts) {
   const {
-    pinyinProvider = "google_free",
+    pinyinProvider = "pinyin_pro_local", 
     cacheSalt = 1,
   } = opts || {};
 
