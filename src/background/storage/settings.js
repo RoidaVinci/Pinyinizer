@@ -1,37 +1,82 @@
-const DEFAULTS = {
+// Settings schema, defaults, persistence and migrations.
+//
+// Everything lives under chrome.storage.local key "settings" as a single
+// object. Readers always get DEFAULTS deep-merged with what is stored, so new
+// fields are safe to add here without a migration.
+
+import { providerConfigDefaults } from "../translator/registry.js";
+
+export const DEFAULTS = {
   enabled: true,
-  provider: "google_free",      // "mock" | "http"
-  pinyinProvider: "pinyin_pro_local", // "google_free" | "pinyin_pro_local"
-  sourceLang: "zh",
+
+  // "translate" | "pinyin"
+  mode: "translate",
+
+  // Translation provider id — see src/background/translator/registry.js
+  provider: "google_free",
+
+  // Pinyin provider id — see src/background/annotator/index.js
+  pinyinProvider: "pinyin_pro_local",
+
+  sourceLang: "auto",
   targetLangs: ["es", "en"],
   excludeLangs: ["en", "es"],
-  batchSize: 200,
-  mode: "translate",     // "translate" | "pinyin"
+
   annotate: {
-    showEnglish: false,   // keep English glosses after Hanzi
-    // NEW — default scales used in pinyin mode when English is NOT shown
-    hanziScale: 0.90,     // matches your previous const HANZI_SCALE_NO_EN
-    pinyinScale: 0.53     // matches your previous const PINYIN_SCALE_NO_EN
+    showEnglish: false,
+    hanziScale: 0.90,
+    pinyinScale: 0.53,
   },
+
   glossary: {
-    dnt: ["Chrome", "API"],
-    replace: []         // [["colour","color"]] etc.
+    dnt: ["Chrome", "API"], // do-not-translate tokens
+    replace: [],            // [["colour", "color"], ...]
   },
-  perSite: {}           // domain -> overrides
+
+  // Experimental: translate <video> subtitle cues (TextTracks) in real time.
+  liveCaptions: {
+    enabled: false,
+  },
+
+  // Per-provider configuration (API keys, endpoints, model names), derived
+  // from the registry so each field's default is defined exactly once.
+  providerConfig: providerConfigDefaults(),
 };
 
+// Provider ids that were renamed; applied on read so old installs keep working.
+const PROVIDER_ALIASES = {
+  http: "libretranslate",
+};
+
+// Merged settings are memoized per worker lifetime: batch messages arrive
+// constantly and re-reading + re-merging storage for each one is waste.
+// Invalidated by storage.onChanged (fires for writes from any context).
+let cached = null;
+if (globalThis.chrome?.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) cached = null;
+  });
+}
+
 export async function getSettings() {
+  if (cached) return cached;
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULTS, ...(settings || {}) };
+  const merged = deepMerge(DEFAULTS, settings || {});
+  merged.provider = PROVIDER_ALIASES[merged.provider] || merged.provider;
+  cached = merged;
+  return merged;
 }
 
 export async function setSettings(partial) {
   const current = await getSettings();
   const settings = deepMerge(current, partial);
+  cached = null;
   await chrome.storage.local.set({ settings });
 }
 
-function deepMerge(a, b) {
+// Merge b over a. Arrays are replaced wholesale (not concatenated) so lists
+// like targetLangs can be shrunk from the UI.
+export function deepMerge(a, b) {
   if (Array.isArray(a) && Array.isArray(b)) return b.slice();
   if (isObj(a) && isObj(b)) {
     const out = { ...a };
@@ -40,4 +85,5 @@ function deepMerge(a, b) {
   }
   return b === undefined ? a : b;
 }
+
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);

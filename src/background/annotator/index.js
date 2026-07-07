@@ -1,4 +1,4 @@
-import { fastHash } from "../../common/hash.js";
+import { stableHash } from "../../common/hash.js";
 import { getMany, setMany } from "../storage/cache.js";
 import { pinyinGoogleFree } from "./providers/google_pinyin_free.js";
 import { pinyinProLocal } from "./providers/pinyin_pro_local.js";
@@ -15,7 +15,7 @@ export async function annotateBatch(texts, opts) {
   } = opts || {};
 
   const arr = Array.isArray(texts) ? texts.map(s => s ?? "") : [String(texts ?? "")];
-  const keys = arr.map(s => fastHash(`mode=pinyin|${pinyinProvider}|${cacheSalt}|${s}`));
+  const keys = arr.map(s => stableHash(`mode=pinyin|${pinyinProvider}|${cacheSalt}|${s}`));
   const cached = await getMany(keys);
 
   const misses = [];
