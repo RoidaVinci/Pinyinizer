@@ -1,6 +1,8 @@
 // Unofficial Google Translate (no key) — fast batched + safe fallback to per-item.
 // Endpoint: https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=..&tl=..&q=...
 
+import { fetchJson, mapPool } from "../../../common/utils.js";
+
 const BASE = "https://translate.googleapis.com/translate_a/single";
 const BATCH_SIZE = 25;        // number of inputs per HTTP request
 const CONCURRENCY = 6;        // parallel requests (be polite to avoid throttling)
@@ -15,16 +17,10 @@ export async function translateGoogleFree(texts, { sourceLang = "auto", targetLa
   const batches = chunkByCountAndUrl(inputs, BATCH_SIZE, MAX_URL_LEN, sourceLang, targetLang);
 
   const out = new Array(inputs.length);
-  let i = 0;
-  async function worker() {
-    while (i < batches.length) {
-      const idx = i++;
-      const { start, end, slice } = batches[idx];
-      const res = await translateBatchSafe(slice, sourceLang, targetLang);
-      for (let k = 0; k < res.length; k++) out[start + k] = res[k];
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, worker));
+  await mapPool(batches, CONCURRENCY, async ({ start, slice }) => {
+    const res = await translateBatchSafe(slice, sourceLang, targetLang);
+    for (let k = 0; k < res.length; k++) out[start + k] = res[k];
+  });
   return out;
 }
 
@@ -47,50 +43,22 @@ async function requestBatched(arr, sl, tl) {
   // Build URL with multiple q= parameters
   const qs = arr.map(q => `q=${encodeURIComponent(q)}`).join("&");
   const url = `${BASE}?client=gtx&dt=t&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&${qs}`;
-
-  let lastErr;
-  for (let attempt = 0; attempt <= RETRIES; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, { method: "GET" }, TIMEOUT_MS);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      return data;
-    } catch (e) {
-      lastErr = e;
-      await delay(200 * (attempt + 1));
-    }
-  }
-  throw lastErr;
+  return fetchJson(url, { method: "GET" }, { retries: RETRIES, timeoutMs: TIMEOUT_MS });
 }
 
-async function translatePerItem(arr, sl, tl) {
-  const out = new Array(arr.length);
-  let i = 0;
-  async function worker() {
-    while (i < arr.length) {
-      const idx = i++;
-      out[idx] = await requestSingle(arr[idx], sl, tl);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(4, arr.length) }, worker));
-  return out;
+function translatePerItem(arr, sl, tl) {
+  return mapPool(arr, 4, (q) => requestSingle(q, sl, tl));
 }
+
 async function requestSingle(q, sl, tl) {
   const url = `${BASE}?client=gtx&dt=t&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(q)}`;
-  let lastErr;
-  for (let attempt = 0; attempt <= RETRIES; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, { method: "GET" }, TIMEOUT_MS);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      return joinSegments(data) || q;
-    } catch (e) {
-      lastErr = e;
-      await delay(200 * (attempt + 1));
-    }
+  try {
+    const data = await fetchJson(url, { method: "GET" }, { retries: RETRIES, timeoutMs: TIMEOUT_MS });
+    return joinSegments(data) || q;
+  } catch (e) {
+    console.warn("[CT:bg] google_free single error:", e?.message || e);
+    return q;
   }
-  console.warn("[CT:bg] google_free single error:", lastErr?.message || lastErr);
-  return q;
 }
 
 // ---- response mapping ----
@@ -167,11 +135,3 @@ function eqLoose(a, b) {
   const nb = String(b).replace(/\s+/g, " ").trim();
   return na === nb;
 }
-
-async function fetchWithTimeout(url, init, ms) {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  try { return await fetch(url, { ...init, signal: ctrl.signal }); }
-  finally { clearTimeout(id); }
-}
-const delay = (ms) => new Promise(r => setTimeout(r, ms));

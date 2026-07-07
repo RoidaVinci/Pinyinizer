@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Translate and Pinyin toolbox",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "minimum_chrome_version": "116",
   "description": "Multi-use toolbox for language translation, pinyin/pinyin+english annotation in Chinese websites. Useful to both translate websites for common use and learn Chinese.",
   "permissions": ["storage", "scripting", "activeTab", "tabs"],
   "host_permissions": ["<all_urls>"],
@@ -19,7 +20,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/content/**", "src/common/**"],
+      "resources": ["src/content/lib/*", "src/common/*"],
       "matches": ["<all_urls>"]
     }
   ],

@@ -51,13 +51,13 @@
       </div>
 
       <div class="field">
-        <span>Hanzi scale (no English)</span>
+        <span>Hanzi scale</span>
         <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="hanziScaleVal"></code></small>
       </div>
 
       <div class="field">
-        <span>Pinyin scale (no English)</span>
+        <span>Pinyin scale</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
       </div>
@@ -66,6 +66,20 @@
     <!-- Translate-only options -->
     <section id="translateSection">
       <h2>Translate options</h2>
+
+      <div class="field">
+        <span>Provider</span>
+        <select id="provider"></select>
+        <small id="providerDescription"></small>
+      </div>
+
+      <!-- Per-provider settings, rendered from the registry -->
+      <div id="providerConfig"></div>
+
+      <div class="actions">
+        <button id="testProvider" type="button">Test provider</button>
+      </div>
+      <div id="testResult" class="field"><small></small></div>
 
       <div class="field">
         <span>Target languages (comma separated)</span>
@@ -78,34 +92,37 @@
       </div>
 
       <div class="field">
-        <span>Exclude languages</span>
+        <span>Exclude languages (never translate pages in these)</span>
         <input id="excludeLangs" placeholder="en, es" />
-      </div>
-
-      <div class="field">
-        <span>Provider</span>
-        <select id="provider">
-          <option value="mock">Mock (dev)</option>
-          <option value="http">HTTP API</option>
-          <option value="google_free">Google (free, no key)</option>
-          <option value="nllb">NLLB (offline, safe)</option>
-        </select>
       </div>
 
       <div class="field">
         <span>Glossary — Do Not Translate (comma separated)</span>
         <input id="glossaryDnt" placeholder="Brand, API, ProductX" />
       </div>
+
+      <div class="toggle-row" id="liveCaptionsRow">
+        <span class="toggle-label off">Captions off</span>
+        <label class="switch">
+          <input id="liveCaptionsEnabled" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label on">Live captions</span>
+      </div>
+      <div class="field">
+        <small>Experimental: translate video subtitles (TextTracks) in real time.</small>
+      </div>
     </section>
 
     <div class="actions">
       <button id="save">Save</button>
+      <button id="clearCache" type="button" title="Forget cached translations">Clear cache</button>
     </div>
     <div id="status"></div>
 
     <div class="footer-credit">by Roi Vence</div>
   </main>
 
-  <script src="index.js"></script>
+  <script type="module" src="index.js"></script>
 </body>
 </html>

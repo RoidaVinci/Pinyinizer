@@ -1,131 +1,213 @@
+// Options page. Runs as an ES module so it can share the provider registry
+// with the service worker (single source of truth for provider metadata).
+
+import { PROVIDER_META, providerMeta } from "../../background/translator/registry.js";
+import { LANG_CODES } from "../../common/langs.js";
+
 document.addEventListener("DOMContentLoaded", async () => {
-  // Toggles
-  const enabledRow = document.getElementById("enabledRow");
-  const enabledSwitch = document.getElementById("enabledSwitch");
-  const modeRow = document.getElementById("modeRow");
-  const modeSwitch = document.getElementById("modeSwitch");
-  const englishRow = document.getElementById("englishRow");
-  const annotateShowEnglish = document.getElementById("annotateShowEnglish");
+  const $ = (id) => document.getElementById(id);
 
-  // Sections
-  const pinyinSection = document.getElementById("pinyinSection");
-  const translateSection = document.getElementById("translateSection");
+  const enabledRow = $("enabledRow");
+  const enabledSwitch = $("enabledSwitch");
+  const modeRow = $("modeRow");
+  const modeSwitch = $("modeSwitch");
+  const englishRow = $("englishRow");
+  const annotateShowEnglish = $("annotateShowEnglish");
 
-  // Pinyin controls
-  const pinyinProvider = document.getElementById("pinyinProvider");
-  const hanziScale = document.getElementById("hanziScale");
-  const pinyinScale = document.getElementById("pinyinScale");
-  const hanziScaleVal = document.getElementById("hanziScaleVal");
-  const pinyinScaleVal = document.getElementById("pinyinScaleVal");
+  const pinyinSection = $("pinyinSection");
+  const translateSection = $("translateSection");
 
-  // Translate controls
-  const targetLangs = document.getElementById("targetLangs");
-  const sourceLang = document.getElementById("sourceLang");
-  const excludeLangs = document.getElementById("excludeLangs");
-  const provider = document.getElementById("provider");
-  const glossaryDnt = document.getElementById("glossaryDnt");
+  const pinyinProvider = $("pinyinProvider");
+  const hanziScale = $("hanziScale");
+  const pinyinScale = $("pinyinScale");
+  const hanziScaleVal = $("hanziScaleVal");
+  const pinyinScaleVal = $("pinyinScaleVal");
 
-  // Save/status
-  const saveBtn = document.getElementById("save");
-  const status = document.getElementById("status");
+  const provider = $("provider");
+  const providerDescription = $("providerDescription");
+  const providerConfigEl = $("providerConfig");
+  const testProviderBtn = $("testProvider");
+  const testResult = $("testResult").querySelector("small");
+
+  const targetLangs = $("targetLangs");
+  const sourceLang = $("sourceLang");
+  const excludeLangs = $("excludeLangs");
+  const glossaryDnt = $("glossaryDnt");
+  const liveCaptionsRow = $("liveCaptionsRow");
+  const liveCaptionsEnabled = $("liveCaptionsEnabled");
+
+  const saveBtn = $("save");
+  const clearCacheBtn = $("clearCache");
+  const status = $("status");
 
   const settings = await send("CT_GET_SETTINGS");
 
-  // ----- init toggles -----
-  // Enabled
+  // Working copy of per-provider config, mutated by the generated inputs.
+  const providerConfig = structuredClone(settings.providerConfig || {});
+
+  // ----- toggles -----
   enabledSwitch.checked = !!settings.enabled;
   reflectToggleUI(enabledRow, enabledSwitch.checked);
+  enabledSwitch.addEventListener("change", () => reflectToggleUI(enabledRow, enabledSwitch.checked));
 
-  // Mode (Translate=false, Pinyin=true)
   const isPinyin = settings.mode === "pinyin";
   modeSwitch.checked = isPinyin;
   reflectToggleUI(modeRow, isPinyin);
-  toggleSections(isPinyin ? "pinyin" : "translate");
+  toggleSections(isPinyin);
+  modeSwitch.addEventListener("change", () => {
+    reflectToggleUI(modeRow, modeSwitch.checked);
+    toggleSections(modeSwitch.checked);
+  });
 
-  // Show English
   annotateShowEnglish.checked = !!settings.annotate?.showEnglish;
   reflectToggleUI(englishRow, annotateShowEnglish.checked);
-
-  // Toggle listeners
-  enabledSwitch.addEventListener("change", () =>
-    reflectToggleUI(enabledRow, enabledSwitch.checked)
-  );
-  modeSwitch.addEventListener("change", () => {
-    const on = modeSwitch.checked;
-    reflectToggleUI(modeRow, on);
-    toggleSections(on ? "pinyin" : "translate");
-  });
   annotateShowEnglish.addEventListener("change", () =>
-    reflectToggleUI(englishRow, annotateShowEnglish.checked)
-  );
+    reflectToggleUI(englishRow, annotateShowEnglish.checked));
 
-  // ----- init pinyin controls -----
-  if (pinyinProvider) pinyinProvider.value = settings.pinyinProvider || "pinyin_pro_local";
+  liveCaptionsEnabled.checked = !!settings.liveCaptions?.enabled;
+  reflectToggleUI(liveCaptionsRow, liveCaptionsEnabled.checked);
+  liveCaptionsEnabled.addEventListener("change", () =>
+    reflectToggleUI(liveCaptionsRow, liveCaptionsEnabled.checked));
+
+  // ----- pinyin controls -----
+  pinyinProvider.value = settings.pinyinProvider || "pinyin_pro_local";
   const sHanzi = clampNum(settings.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
   const sPinyin = clampNum(settings.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
   hanziScale.value = sHanzi;
   pinyinScale.value = sPinyin;
   hanziScaleVal.textContent = sHanzi.toFixed(2);
   pinyinScaleVal.textContent = sPinyin.toFixed(2);
-  hanziScale.addEventListener("input", () => {
-    hanziScaleVal.textContent = (+hanziScale.value).toFixed(2);
-  });
-  pinyinScale.addEventListener("input", () => {
-    pinyinScaleVal.textContent = (+pinyinScale.value).toFixed(2);
+  hanziScale.addEventListener("input", () => { hanziScaleVal.textContent = (+hanziScale.value).toFixed(2); });
+  pinyinScale.addEventListener("input", () => { pinyinScaleVal.textContent = (+pinyinScale.value).toFixed(2); });
+
+  // ----- provider select + generated config forms -----
+  for (const meta of PROVIDER_META) {
+    const opt = document.createElement("option");
+    opt.value = meta.id;
+    opt.textContent = meta.label;
+    provider.appendChild(opt);
+  }
+  provider.value = settings.provider || "google_free";
+  renderProviderConfig(provider.value);
+  provider.addEventListener("change", () => renderProviderConfig(provider.value));
+
+  function renderProviderConfig(id) {
+    const meta = providerMeta(id);
+    providerDescription.textContent = meta?.description || "";
+    providerConfigEl.innerHTML = "";
+    if (!meta) return;
+
+    for (const field of meta.configFields) {
+      const wrap = document.createElement("div");
+      wrap.className = "field";
+
+      const label = document.createElement("span");
+      label.textContent = `${meta.label} — ${field.label}`;
+      wrap.appendChild(label);
+
+      const input = document.createElement("input");
+      input.type = field.type === "password" ? "password" : "text";
+      input.placeholder = field.placeholder || field.default || "";
+      input.value = providerConfig[id]?.[field.key] ?? "";
+      input.addEventListener("input", () => {
+        providerConfig[id] = providerConfig[id] || {};
+        providerConfig[id][field.key] = input.value.trim();
+      });
+      wrap.appendChild(input);
+
+      providerConfigEl.appendChild(wrap);
+    }
+  }
+
+  // ----- test provider -----
+  testProviderBtn.addEventListener("click", async () => {
+    testResult.textContent = "Testing…";
+    // Save config first so the background sees fresh keys/endpoints.
+    await send("CT_SET_SETTINGS", { providerConfig });
+    const resp = await send("CT_TEST_PROVIDER", {
+      provider: provider.value,
+      targetLang: (targetLangs.value.split(",")[0] || "es").trim(),
+    });
+    testResult.textContent = resp?.ok
+      ? `✓ "${resp.result}"`
+      : `✗ ${resp?.error || "unknown error"}`;
+    testResult.style.color = resp?.ok ? "#059669" : "#dc2626";
   });
 
-  // ----- init translate controls -----
+  // ----- translate controls -----
   targetLangs.value = (settings.targetLangs || ["es", "en"]).join(", ");
   sourceLang.value = settings.sourceLang || "auto";
   excludeLangs.value = (settings.excludeLangs || ["en", "es"]).join(", ");
-  provider.value = settings.provider || "http";
   glossaryDnt.value = (settings.glossary?.dnt || []).join(", ");
 
   // ----- save -----
   saveBtn.addEventListener("click", async () => {
-    const payload = {
+    const [targets, badTargets] = splitKnownLangs(csv(targetLangs.value));
+    const [excludes, badExcludes] = splitKnownLangs(csv(excludeLangs.value));
+    const source = (sourceLang.value || "auto").trim();
+    const unknown = [...badTargets, ...badExcludes, ...(LANG_CODES.includes(source) ? [] : [source])];
+
+    await send("CT_SET_SETTINGS", {
       enabled: enabledSwitch.checked,
       mode: modeSwitch.checked ? "pinyin" : "translate",
-      pinyinProvider: pinyinProvider ? pinyinProvider.value : (settings.pinyinProvider || "pinyin_pro_local"),
+      pinyinProvider: pinyinProvider.value,
       annotate: {
         ...(settings.annotate || {}),
         showEnglish: annotateShowEnglish.checked,
         hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
         pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2),
       },
-      targetLangs: targetLangs.value.split(",").map(s => s.trim()).filter(Boolean),
-      sourceLang: (sourceLang.value || "auto").trim(),
-      excludeLangs: excludeLangs.value.split(",").map(s => s.trim()).filter(Boolean),
       provider: provider.value,
+      providerConfig,
+      targetLangs: targets,
+      sourceLang: LANG_CODES.includes(source) ? source : "auto",
+      excludeLangs: excludes,
       glossary: {
         ...(settings.glossary || {}),
-        dnt: glossaryDnt.value.split(",").map(s => s.trim()).filter(Boolean)
-      }
-    };
-
-    await send("CT_SET_SETTINGS", payload);
-    status.textContent = "Saved ✓";
-    setTimeout(() => (status.textContent = ""), 1200);
+        dnt: csv(glossaryDnt.value),
+      },
+      liveCaptions: { enabled: liveCaptionsEnabled.checked },
+    });
+    flash(unknown.length ? `Saved ✓ (ignored unknown: ${unknown.join(", ")})` : "Saved ✓");
   });
 
-  // ----- helpers -----
-  function reflectToggleUI(rowEl, isOn) {
-    if (!rowEl) return;
-    rowEl.classList.toggle("is-on", !!isOn);
-  }
+  clearCacheBtn.addEventListener("click", async () => {
+    await send("CT_CLEAR_CACHE");
+    flash("Cache cleared ✓");
+  });
 
-  function toggleSections(mode) {
-    const isPinyinMode = mode === "pinyin";
+  function toggleSections(isPinyinMode) {
     pinyinSection.hidden = !isPinyinMode;
     translateSection.hidden = isPinyinMode;
   }
+
+  function flash(text) {
+    status.textContent = text;
+    setTimeout(() => (status.textContent = ""), 1500);
+  }
 });
 
-// messaging & utils
+// ----- helpers -----
+function reflectToggleUI(rowEl, isOn) {
+  rowEl?.classList.toggle("is-on", !!isOn);
+}
+
+function csv(value) {
+  return value.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+// [known, unknown] — providers reject codes outside the shared list, so bad
+// entries are dropped at save time (and reported) instead of failing later.
+function splitKnownLangs(codes) {
+  const known = [], unknown = [];
+  for (const c of codes) (LANG_CODES.includes(c) ? known : unknown).push(c);
+  return [known, unknown];
+}
+
 function send(type, payload) {
   return new Promise((resolve) =>
-    chrome.runtime.sendMessage({ type, payload }, resolve)
-  );
+    chrome.runtime.sendMessage({ type, payload }, resolve));
 }
+
 const clampNum = (n, lo, hi) =>
   Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : lo));

@@ -1,6 +1,8 @@
 // Strict pinyin via Google's free endpoint: we use ONLY s[3] (romanization).
 // Never fall back to translated text (s[0]) to avoid "Chinese (English)" artifacts.
 
+import { fetchJson, mapPool } from "../../../common/utils.js";
+
 const BASE = "https://translate.googleapis.com/translate_a/single";
 const CONCURRENCY = 6;
 const RETRIES = 2;
@@ -11,18 +13,9 @@ const HAN = /\p{Script=Han}/u;
 const HAS_TONE_MARK = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/i;
 const LOOKS_PINYIN = /[a-z]/i;
 
-export async function pinyinGoogleFree(texts) {
+export function pinyinGoogleFree(texts) {
   const arr = Array.isArray(texts) ? texts.map(s => s ?? "") : [String(texts ?? "")];
-  const out = new Array(arr.length);
-  let i = 0;
-  async function worker() {
-    while (i < arr.length) {
-      const idx = i++;
-      out[idx] = await fetchPinyinSingle(arr[idx]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, arr.length) }, worker));
-  return out;
+  return mapPool(arr, CONCURRENCY, fetchPinyinSingle);
 }
 
 async function fetchPinyinSingle(q) {
@@ -35,7 +28,7 @@ async function fetchPinyinSingle(q) {
 
   for (const url of urls) {
     try {
-      const data = await fetchJsonWithRetry(url);
+      const data = await fetchJson(url, { method: "GET" }, { retries: RETRIES, timeoutMs: TIMEOUT_MS });
       const py = extractStrictPinyin(data);
       if (py) return py;
     } catch (_) { /* try next */ }
@@ -86,25 +79,3 @@ function fallbackPinyin(q) {
   return any ? out.join(" ").replace(/\s+/g, " ").trim() : "";
 }
 
-// --- networking ---
-async function fetchJsonWithRetry(url) {
-  let lastErr;
-  for (let attempt = 0; attempt <= RETRIES; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, { method: "GET" }, TIMEOUT_MS);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) {
-      lastErr = e;
-      await delay(200 * (attempt + 1));
-    }
-  }
-  throw lastErr;
-}
-async function fetchWithTimeout(url, init, ms) {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  try { return await fetch(url, { ...init, signal: ctrl.signal }); }
-  finally { clearTimeout(id); }
-}
-const delay = (ms) => new Promise(r => setTimeout(r, ms));

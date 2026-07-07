@@ -33,12 +33,7 @@
       <div class="field">
         <label class="field-label">Source</label>
         <div class="select-wrap">
-          <select id="sourceLangSelect">
-            <option value="auto">auto</option>
-            <option value="zh">zh</option>
-            <option value="es">es</option>
-            <option value="en">en</option>
-          </select>
+          <select id="sourceLangSelect"></select>
         </div>
       </div>
 
@@ -46,12 +41,7 @@
         <label class="field-label">Target</label>
         <div class="chips-row" id="targetChips"></div>
         <div class="select-wrap">
-          <select id="targetSelect">
-            <option value="" disabled selected>Add target…</option>
-            <option value="zh">zh</option>
-            <option value="es">es</option>
-            <option value="en">en</option>
-          </select>
+          <select id="targetSelect"></select>
         </div>
       </div>
 
@@ -59,12 +49,7 @@
         <label class="field-label">Exclude</label>
         <div class="chips-row" id="excludeChips"></div>
         <div class="select-wrap">
-          <select id="excludeSelect">
-            <option value="" disabled selected>Add exclude…</option>
-            <option value="zh">zh</option>
-            <option value="es">es</option>
-            <option value="en">en</option>
-          </select>
+          <select id="excludeSelect"></select>
         </div>
       </div>
     </section>
@@ -81,14 +66,13 @@
         <span class="toggle-label on">Show English</span>
       </div>
 
-      <!-- (Keep your existing sliders; they remain here and work the same) -->
       <label class="stack" style="margin-bottom:12px;">
-        <span>Hanzi scale (no English)</span>
+        <span>Hanzi scale</span>
         <input id="hanziScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="hanziScaleVal"></code></small>
       </label>
       <label class="stack" style="margin-bottom:12px;">
-        <span>Pinyin scale (no English)</span>
+        <span>Pinyin scale</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
       </label>
@@ -103,6 +87,6 @@
     </div>
     <div class="footer-credit">by Roi Vence</div>
   </main>
-  <script src="index.js"></script>
+  <script type="module" src="index.js"></script>
 </body>
 </html>
