@@ -8,9 +8,12 @@ It can also add **pinyin** above Chinese text, which makes it handy if you're
 learning the language.
 
 <p align="center">
-  <img src="images/translate1.png" width="32%">
-  <img src="images/translate2.png" width="32%">
-  <img src="images/translate3.png" width="32%">
+  <img src="images/translate1.png" width="100%" alt="Translating a page in place">
+</p>
+
+<p align="center">
+  <img src="images/translate2.png" width="49%" alt="Pinyin above Chinese text">
+  <img src="images/translate3.png" width="49%" alt="Live caption translation">
 </p>
 
 ---
