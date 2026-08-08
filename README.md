@@ -7,10 +7,11 @@ was. One click puts the original back.
 It can also add **pinyin** above Chinese text, which makes it handy if you're
 learning the language.
 
-![Translating a page in place](images/translate1.png)
-![Translating a page in place](images/translate2.png)
-![Translating a page in place](images/translate3.png)
-![Translating a page in place](images/translate4.png)
+<p align="center">
+  <img src="images/translate1.png" width="32%">
+  <img src="images/translate2.png" width="32%">
+  <img src="images/translate3.png" width="32%">
+</p>
 
 ---
 
@@ -56,7 +57,9 @@ take about two minutes to set up.
 The other choices — Google Cloud, NLLB, LibreTranslate — are there if you
 already run one of them or need something more reliable at scale.
 
-![The Options page](images/options.png)
+<p align="center">
+  <img src="images/options.png" width="70%" alt="The Options page">
+</p>
 
 ---
 
