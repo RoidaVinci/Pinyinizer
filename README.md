@@ -1,10 +1,10 @@
-# Clean Translate
+# Pinyinizer
 
 A Chrome extension that translates any web page **without breaking it**. The
 text changes, everything else — images, buttons, layout — stays exactly where it
 was. One click puts the original back.
 
-It can also add **pinyin** above Chinese text, which makes it handy if you're
+It can also add **pinyin** below Chinese text, which makes it handy if you're
 learning the language.
 
 <p align="center">
