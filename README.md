@@ -1,75 +1,103 @@
-# Clean Translate (MV3)
+# Clean Translate
 
-Chrome extension that translates web pages **in place** (text nodes are
-replaced, layout is preserved) or annotates Chinese text with **pinyin ruby**
-— useful both for everyday reading and for learning Chinese.
+A Chrome extension that translates any web page **without breaking it**. The
+text changes, everything else — images, buttons, layout — stays exactly where it
+was. One click puts the original back.
 
-## Install (developer mode)
+It can also add **pinyin** above Chinese text, which makes it handy if you're
+learning the language.
 
-1. `chrome://extensions` → enable **Developer mode**
-2. **Load unpacked** → select this folder
+![Translating a page in place](images/translate1.png)
+![Translating a page in place](images/translate2.png)
+![Translating a page in place](images/translate3.png)
+![Translating a page in place](images/translate4.png)
 
-No build step: the extension runs straight from the repo.
+---
 
-## Features
+## Install
 
-- **Translate mode** — replaces text nodes in place; handles SPAs and
-  dynamically inserted content via a debounced MutationObserver; one-click undo
-  restores the original page exactly.
-- **Pinyin mode** — wraps Han text in `<ruby>` with per-character pinyin and
-  optional per-sentence English glosses.
-- **Live captions (experimental)** — translates `<video>` subtitle cues
-  (TextTracks) in real time. First milestone of the
-  [real-time translation roadmap](docs/ROADMAP.md).
-- **Pluggable providers** with per-provider config, caching, and a glossary
-  (do-not-translate terms + forced replacements).
+There's no download or build step — it runs straight from this folder.
 
-## Translation providers
+1. Open `chrome://extensions` in Chrome
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and pick this folder
 
-Configure in **Options**. Each provider has a **Test** button so you can
-verify credentials before saving.
+That's it. The Clean Translate icon appears in your toolbar.
 
-| Provider | Setup | Notes |
-| --- | --- | --- |
-| Google Translate (free) | none | Unofficial endpoint; zero setup, may throttle. Blocked in mainland China. |
-| Google Cloud Translation | API key | Official v2 API. Reliable, ToS-compliant. |
-| Baidu Fanyi 百度翻译 | App ID + key from [api.fanyi.baidu.com](https://api.fanyi.baidu.com) | Works from mainland China. Free tier ≈1 QPS. |
-| Youdao 有道智云 | App key + secret from [ai.youdao.com](https://ai.youdao.com) | Works from mainland China. |
-| **Local LLM** | Ollama / LM Studio / llama.cpp | **Fully private** — nothing leaves your machine. See below. |
-| NLLB local server | Self-hosted FastAPI + `facebook/nllb-200` | Offline; faster than an LLM for pure translation. |
-| LibreTranslate | endpoint (+ optional key) | Open-source API, self-hosted or public instance. |
+---
 
-### Private local translation (minimal setup)
+## Using it
 
-The `Local LLM` provider speaks the OpenAI chat-completions protocol, so any
-local server works. The fastest path is [Ollama](https://ollama.com):
+Click the toolbar icon and choose a mode:
+
+- **Translate** — rewrites the page in your language. Works on sites that load
+  content as you scroll, too. Click **Undo** to get the original back.
+- **Pinyin** — puts pinyin above each Chinese character, with an optional
+  English gloss under each sentence.
+- **Captions** (experimental) — translates subtitles on `<video>` players as
+  they play.
+
+---
+
+## Choosing a translator
+
+Open **Options** to pick where translations come from. Every option has a
+**Test** button, so you can check it works before saving.
+
+**Just want it to work?** Pick **Google Translate (free)**. No setup, no account,
+no API key. (It doesn't work from mainland China.)
+
+**Want nothing to leave your computer?** Pick **Local LLM** — see the section
+below.
+
+**In mainland China?** Use **Baidu** or **Youdao**. Both need a free account and
+take about two minutes to set up.
+
+The other choices — Google Cloud, NLLB, LibreTranslate — are there if you
+already run one of them or need something more reliable at scale.
+
+![The Options page](images/options.png)
+
+---
+
+## Fully private translation (optional)
+
+If you'd rather no website ever sees the pages you read, run the translator on
+your own machine. The easiest way is [Ollama](https://ollama.com):
 
 ```bash
-ollama pull qwen2.5:1.5b-instruct        # ~1 GB, good multilingual quality
+ollama pull qwen2.5:1.5b-instruct
 OLLAMA_ORIGINS="chrome-extension://*" ollama serve
 ```
 
-Then in Options pick **Local LLM** (defaults: `http://127.0.0.1:11434`,
-`qwen2.5:1.5b-instruct`) and hit **Test**. The `OLLAMA_ORIGINS` variable is
-required because extensions call from a `chrome-extension://` origin.
+Then in **Options**, choose **Local LLM** and click **Test**. The defaults are
+already filled in.
 
-LM Studio (`http://127.0.0.1:1234`) and `llama-server`
-(`http://127.0.0.1:8080`) work the same way — just change the base URL.
+The `OLLAMA_ORIGINS` line is needed because Chrome extensions count as an
+outside app, and Ollama blocks those by default.
 
-## Development
+LM Studio and llama.cpp work too — just change the address to
+`http://127.0.0.1:1234` or `http://127.0.0.1:8080`.
 
-```bash
-node --test tests/*.test.js     # unit tests (pure logic: signing, chunking, glossary…)
-bash scripts/check-syntax.sh    # parse-check every first-party JS file
-```
-
-- Architecture and message protocol: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Real-time translation plan (lectures, videos, subtitles): [docs/ROADMAP.md](docs/ROADMAP.md)
+---
 
 ## Privacy
 
-- Cloud providers receive the page text you translate — pick the **Local LLM**
-  or **NLLB** provider for fully-offline translation.
-- The translation cache lives in `chrome.storage.session` (RAM-backed,
-  cleared when the browser closes); page text is never written to disk.
-- API keys are stored in `chrome.storage.local` on your machine only.
+- Your API keys stay on your computer and are never sent anywhere except to the
+  service they belong to.
+- Translations are kept in memory only and disappear when you close Chrome.
+  Nothing you read is written to disk.
+- If you use a cloud translator, that company sees the text being translated —
+  that's unavoidable. Use **Local LLM** or **NLLB** if that matters to you.
+
+---
+
+## For developers
+
+```bash
+node --test tests/*.test.js     # unit tests
+bash scripts/check-syntax.sh    # syntax check all first-party JS
+```
+
+- [Architecture and message protocol](docs/ARCHITECTURE.md)
+- [Real-time translation roadmap](docs/ROADMAP.md)
