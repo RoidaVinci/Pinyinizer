@@ -2,7 +2,8 @@
 // followed by one English gloss per sentence.
 //
 // With `annotate.accentsOnly` the ruby text is reduced to the syllable's tone
-// mark (ˉ ˊ ˇ ˋ, nothing for the neutral tone) — same pipeline, less to read.
+// mark (ˉ ˊ ˇ ˋ, nothing for the neutral tone), set above the character rather
+// than below — same pipeline, less to read.
 
 import { state } from "./state.js";
 import { collectTextNodes, replaceTextNode } from "./dom.js";
@@ -232,6 +233,10 @@ async function requestEnglish(texts) {
 
 // ---- styles ----
 
+// Tone marks sit right on top of the character, so they get a colour of their
+// own — a bare grey mark is easy to misread as a stroke of the hanzi.
+const ACCENT_COLOR = "#0b74e0";
+
 // A lone tone mark at the pinyin scale is nearly invisible, so accents get a
 // scale of their own — still driven by the user's pinyin slider.
 export function accentScale(pinyinScale) {
@@ -254,13 +259,14 @@ export function ensurePinyinStyles() {
   .ct-ruby rt { line-height: 1.1; color: #555; font-size: var(--ct-pinyin, ${pinyinScale}em); }
   .ct-ruby rb { font-size: var(--ct-hanzi, ${hanziScale}em); letter-spacing: 0.05em; }
 
-  /* Accents-only: a single tone mark per character. The marks are spacing
-     modifier letters, which sit high in their em box, so pull them up snug
-     against the character instead of leaving a floating gap. */
+  /* Accents-only: a single tone mark per character. With no pinyin row to
+     share space with, the mark goes above the character — where tone marks
+     belong — and is tinted so it never reads as one of its strokes. */
+  .ct-accents-only .ct-ruby { ruby-position: over; }
   .ct-accents-only .ct-ruby rt {
     font-size: var(--ct-accent, ${accentScale(pinyinScale)}em);
     line-height: 1;
-    margin-top: -0.15em;
+    color: ${ACCENT_COLOR};
   }
 
   .ct-ruby-block .ct-sentence-en {
