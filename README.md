@@ -5,10 +5,15 @@ text changes, everything else — images, buttons, layout — stays exactly wher
 was. One click puts the original back.
 
 It can also add **pinyin** below Chinese text, which makes it handy if you're
-learning the language.
+beginning to learn the language.
+
+It can also just add **accents** for tones, facilitating the correct pronunciation while not skipping the characters. Useful for more advanced learners who want to read the characters but fail to pronounce the correct tones.
 
 <p align="center">
   <img src="images/translate1.png" width="100%" alt="Translating a page in place">
+</p>
+<p align="center">
+  <img src="images/translate4.png" width="100%" alt="Accent-only version">
 </p>
 
 <p align="center">
