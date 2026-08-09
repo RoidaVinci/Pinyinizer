@@ -39,9 +39,9 @@ Click the toolbar icon and choose a mode:
 - **Pinyin** — puts pinyin above each Chinese character, with an optional
   English gloss under each sentence. A second toggle switches to **Accents
   only**: each character gets just its tone mark (ˉ ˊ ˇ ˋ, and nothing for the
-  neutral tone), set above the character and tinted blue so it never reads as
-  one of its strokes. Handy for practising tones without reading the whole
-  syllable — and the page barely changes width.
+  neutral tone), sitting just above the character in a small blue box so it
+  never reads as one of its strokes. Handy for practising tones without reading
+  the whole syllable — and the page barely changes width.
 - **Captions** (experimental) — translates subtitles on `<video>` players as
   they play.
 
