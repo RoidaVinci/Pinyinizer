@@ -86,8 +86,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ----- pinyin controls -----
   pinyinProvider.value = settings.pinyinProvider || "pinyin_pro_local";
-  const sHanzi = clampNum(settings.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
-  const sPinyin = clampNum(settings.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
+  const sHanzi = clampNum(settings.annotate?.hanziScale ?? 0.90, 0.3, 2.0);
+  const sPinyin = clampNum(settings.annotate?.pinyinScale ?? 0.53, 0.3, 2.0);
   hanziScale.value = sHanzi;
   pinyinScale.value = sPinyin;
   hanziScaleVal.textContent = sHanzi.toFixed(2);
@@ -170,8 +170,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         ...(settings.annotate || {}),
         showEnglish: annotateShowEnglish.checked,
         accentsOnly: annotateAccentsOnly.checked,
-        hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
-        pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2),
+        hanziScale: clampNum(+hanziScale.value, 0.3, 2.0),
+        pinyinScale: clampNum(+pinyinScale.value, 0.3, 2.0),
       },
       provider: provider.value,
       providerConfig,
