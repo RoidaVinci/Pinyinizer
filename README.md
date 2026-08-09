@@ -37,7 +37,10 @@ Click the toolbar icon and choose a mode:
 - **Translate** — rewrites the page in your language. Works on sites that load
   content as you scroll, too. Click **Undo** to get the original back.
 - **Pinyin** — puts pinyin above each Chinese character, with an optional
-  English gloss under each sentence.
+  English gloss under each sentence. A second toggle switches to **Accents
+  only**: each character gets just its tone mark (ˉ ˊ ˇ ˋ, and nothing for the
+  neutral tone), so you can practise tones without reading the whole syllable —
+  and the page barely changes width.
 - **Captions** (experimental) — translates subtitles on `<video>` players as
   they play.
 

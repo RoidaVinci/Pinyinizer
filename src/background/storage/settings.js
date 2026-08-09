@@ -24,6 +24,9 @@ export const DEFAULTS = {
 
   annotate: {
     showEnglish: false,
+    // Show only the tone mark (ˉ ˊ ˇ ˋ) under each character instead of the
+    // full pinyin syllable.
+    accentsOnly: false,
     hanziScale: 0.90,
     pinyinScale: 0.53,
   },

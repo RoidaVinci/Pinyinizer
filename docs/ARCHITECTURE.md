@@ -9,8 +9,8 @@
 │   dom.js                   node filters, collection, replace/revert              │
 │   observer.js              debounced MutationObserver                            │
 │   translate-mode.js        in-place text replacement                             │
-│   pinyin-mode.js           <ruby> annotation + English glosses                   │
-│   pinyin-text.js           pure text helpers (unit-tested)                       │
+│   pinyin-mode.js           <ruby> annotation (pinyin or tone marks) + gloss      │
+│   pinyin-text.js           pure text helpers: syllables, tones (unit-tested)     │
 │   live-captions.js         experimental TextTrack cue translation                │
 └───────────────────────────────────┬──────────────────────────────────────────────┘
                                     │ chrome.runtime messages

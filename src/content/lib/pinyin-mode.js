@@ -1,5 +1,8 @@
 // Pinyin mode: wrap Han runs in <ruby> with per-character pinyin, optionally
 // followed by one English gloss per sentence.
+//
+// With `annotate.accentsOnly` the ruby text is reduced to the syllable's tone
+// mark (ˉ ˊ ˇ ˋ, nothing for the neutral tone) — same pipeline, less to read.
 
 import { state } from "./state.js";
 import { collectTextNodes, replaceTextNode } from "./dom.js";
@@ -9,6 +12,7 @@ import {
   consumeAsciiParenSuffix,
   consumePlainLatinSuffix,
   syllabifyOrCharLookup,
+  toneMarkOf,
 } from "./pinyin-text.js";
 
 // Serialize across all content-script instances via the Web Locks API, with
@@ -84,6 +88,7 @@ export async function annotateNodes(nodes) {
   // 2) Run-level pinyin (fast path), per-character fallback, and optional
   // sentence-level English — three independent round-trips, in parallel.
   const showEnglish = !!state.settings?.annotate?.showEnglish;
+  const accentsOnly = !!state.settings?.annotate?.accentsOnly;
   const sentenceKeys = nodeRuns.map(runs => runs.length ? runs.map(r => r.han).join("") : "");
   const [runPyMap, charPyMap, sentenceEnMap] = await Promise.all([
     fetchPinyinMap(uniqRuns),
@@ -103,7 +108,7 @@ export async function annotateNodes(nodes) {
 
       const wrapper = document.createElement("span");
       wrapper.setAttribute("data-ct", "ruby-block");
-      wrapper.className = "ct-ruby-block";
+      wrapper.className = accentsOnly ? "ct-ruby-block ct-accents-only" : "ct-ruby-block";
 
       let cursor = 0;
       let hadEnglish = false;
@@ -129,7 +134,8 @@ export async function annotateNodes(nodes) {
           const rb = document.createElement("rb");
           rb.textContent = chars[k];
           const rt = document.createElement("rt");
-          rt.textContent = pys[k] || "";
+          const py = pys[k] || "";
+          rt.textContent = accentsOnly ? toneMarkOf(py) : py;
           ruby.appendChild(rb);
           ruby.appendChild(rt);
         }
@@ -169,6 +175,7 @@ export async function annotateNodes(nodes) {
     for (const w of tooTall) {
       w.style.setProperty("--ct-hanzi", (baseH * 0.9) + "em");
       w.style.setProperty("--ct-pinyin", (baseP * 0.9) + "em");
+      w.style.setProperty("--ct-accent", (accentScale(baseP) * 0.9) + "em");
     }
   } finally {
     state.isMutating = false;
@@ -225,9 +232,13 @@ async function requestEnglish(texts) {
 
 // ---- styles ----
 
-export function ensurePinyinStyles() {
-  if (document.getElementById("ct-pinyin-styles")) return;
+// A lone tone mark at the pinyin scale is nearly invisible, so accents get a
+// scale of their own — still driven by the user's pinyin slider.
+export function accentScale(pinyinScale) {
+  return Math.min(1.2, Math.max(0.6, pinyinScale * 1.4));
+}
 
+export function ensurePinyinStyles() {
   const hanziScale = state.settings?.annotate?.hanziScale ?? 0.90;
   const pinyinScale = state.settings?.annotate?.pinyinScale ?? 0.53;
   const englishScale = pinyinScale * 0.8;
@@ -242,6 +253,15 @@ export function ensurePinyinStyles() {
   .ct-ruby rb, .ct-ruby rt { white-space: pre; }
   .ct-ruby rt { line-height: 1.1; color: #555; font-size: var(--ct-pinyin, ${pinyinScale}em); }
   .ct-ruby rb { font-size: var(--ct-hanzi, ${hanziScale}em); letter-spacing: 0.05em; }
+
+  /* Accents-only: a single tone mark per character. The marks are spacing
+     modifier letters, which sit high in their em box, so pull them up snug
+     against the character instead of leaving a floating gap. */
+  .ct-accents-only .ct-ruby rt {
+    font-size: var(--ct-accent, ${accentScale(pinyinScale)}em);
+    line-height: 1;
+    margin-top: -0.15em;
+  }
 
   .ct-ruby-block .ct-sentence-en {
     display: block;
@@ -263,6 +283,14 @@ export function ensurePinyinStyles() {
     white-space: normal;
   }
   `;
+
+  // Rewrite in place when the sheet is already there: Apply can change the
+  // scales (or flip accents on) without the page ever being reloaded.
+  const existing = document.getElementById("ct-pinyin-styles");
+  if (existing) {
+    if (existing.textContent !== css) existing.textContent = css;
+    return;
+  }
 
   const el = document.createElement("style");
   el.id = "ct-pinyin-styles";
