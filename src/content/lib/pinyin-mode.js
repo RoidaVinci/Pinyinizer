@@ -137,15 +137,15 @@ export async function annotateNodes(nodes) {
           const rt = document.createElement("rt");
           const py = pys[k] || "";
           if (accentsOnly) {
-            // The mark carries a box drawn by a pseudo-element, which needs an
-            // element of its own: <rt> is the ruby annotation container and
-            // can't be sized to hug the glyph. Neutral tones stay empty.
+            // The mark is wrapped so it can be nudged down toward the
+            // character: <rt> itself is the ruby annotation container and
+            // ignores position and transform. Neutral tones stay empty.
             const mark = toneMarkOf(py);
             if (mark) {
-              const box = document.createElement("span");
-              box.className = "ct-accent";
-              box.textContent = mark;
-              rt.appendChild(box);
+              const accent = document.createElement("span");
+              accent.className = "ct-accent";
+              accent.textContent = mark;
+              rt.appendChild(accent);
             }
           } else {
             rt.textContent = py;
@@ -246,11 +246,10 @@ async function requestEnglish(texts) {
 
 // ---- styles ----
 
-// Tone marks sit right on top of the character, so they get a colour and a
-// box of their own — a bare grey mark is easy to misread as a stroke of the
-// hanzi.
-const ACCENT_COLOR = "#0b74e0";
-const ACCENT_FILL = "rgba(11, 116, 224, 0.10)";
+// Tone marks sit right on top of the character, so they get a colour of their
+// own — a bare grey mark is easy to misread as a stroke of the hanzi. Dark
+// enough to stay legible where the page's own text is already blue-ish.
+const ACCENT_COLOR = "#0a4f9e";
 
 // A lone tone mark at the pinyin scale is nearly invisible, so accents get a
 // scale of their own — still driven by the user's pinyin slider.
@@ -275,8 +274,8 @@ export function ensurePinyinStyles() {
   .ct-ruby rb { font-size: var(--ct-hanzi, ${hanziScale}em); letter-spacing: 0.05em; }
 
   /* Accents-only: a single tone mark per character, above the character —
-     where tone marks belong — in its own little box so it never reads as one
-     of the hanzi's strokes. */
+     where tone marks belong — in a darker blue so it never reads as one of
+     the hanzi's strokes. */
   .ct-accents-only .ct-ruby { ruby-position: over; }
   .ct-accents-only .ct-ruby rt {
     font-size: var(--ct-accent, ${accentScale(pinyinScale)}em);
@@ -284,33 +283,14 @@ export function ensurePinyinStyles() {
   }
   /* Ruby reserves a full line box above the text, which leaves the mark
      floating; translate it back down so it sits just clear of the character.
-     The reserved space stays put, so nothing collides with the line above. */
+     The reserved space stays put, so nothing collides with the line above.
+     The span exists for this transform alone — <rt> is the ruby annotation
+     container and does not move for position or transform. */
   .ct-accents-only .ct-accent {
     display: inline-block;
-    position: relative;
     line-height: 1;
     color: ${ACCENT_COLOR};
-    transform: translateY(0.55em);
-  }
-  /* The box is a pseudo-element sized to the mark's ink rather than a border
-     on the span: these glyphs are spacing modifier letters whose em box is
-     mostly empty below them, so a plain border would draw a tall rectangle
-     with the mark stranded at its top edge. It is narrow and a touch taller
-     than wide — a box the width of the glyph's advance reads as a flat pill —
-     and its width is fixed rather than inherited from that advance, which
-     varies enough between fonts to change the box's proportions. */
-  .ct-accents-only .ct-accent::before {
-    content: "";
-    position: absolute;
-    box-sizing: border-box;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0.4em;
-    top: -0.06em;
-    height: 0.44em;
-    border: 1px solid ${ACCENT_COLOR};
-    border-radius: 0.12em;
-    background: ${ACCENT_FILL};
+    transform: translateY(0.605em);
   }
 
   .ct-ruby-block .ct-sentence-en {
