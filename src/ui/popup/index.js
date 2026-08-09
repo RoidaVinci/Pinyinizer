@@ -12,6 +12,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const modeRow = document.querySelector("#modeRow");
   const englishToggle = document.querySelector("#annotateShowEnglish");
   const englishRow = document.querySelector("#englishRow");
+  const accentsToggle = document.querySelector("#annotateAccentsOnly");
+  const accentsRow = document.querySelector("#accentsRow");
 
   // Sections
   const translateSection = document.querySelector("#translateSection");
@@ -22,6 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const pinyinScale = document.querySelector("#pinyinScale");
   const hanziScaleVal = document.querySelector("#hanziScaleVal");
   const pinyinScaleVal = document.querySelector("#pinyinScaleVal");
+  const pinyinScaleLabel = document.querySelector("#pinyinScaleLabel");
 
   // Language controls
   const sourceLangSelect = document.querySelector("#sourceLangSelect");
@@ -53,6 +56,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Show English toggle (Pinyin mode)
   englishToggle.checked = !!prev.annotate?.showEnglish;
   reflectToggleUI(englishRow, englishToggle.checked);
+
+  // Accents-only toggle — checked = tone marks, unchecked = full pinyin
+  accentsToggle.checked = !!prev.annotate?.accentsOnly;
+  reflectToggleUI(accentsRow, accentsToggle.checked);
+  reflectAccentLabel();
 
   // Pinyin scales
   const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
@@ -113,12 +121,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     reflectToggleUI(englishRow, englishToggle.checked);
   });
 
+  accentsToggle.addEventListener("change", () => {
+    reflectToggleUI(accentsRow, accentsToggle.checked);
+    reflectAccentLabel();
+  });
+
   applyBtn.addEventListener("click", async () => {
     await send("CT_SET_SETTINGS", {
       mode: modeSwitch.checked ? "pinyin" : "translate",
       annotate: {
         ...(prev.annotate || {}),
         showEnglish: englishToggle.checked,
+        accentsOnly: accentsToggle.checked,
         hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
         pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2),
       },
@@ -135,6 +149,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     await sendToActiveTab("CT_UNDO");
     window.close();
   });
+
+  function reflectAccentLabel() {
+    pinyinScaleLabel.textContent = accentsToggle.checked ? "Accent scale" : "Pinyin scale";
+  }
 
   function toggleSections(mode) {
     const isPinyin = mode === "pinyin";

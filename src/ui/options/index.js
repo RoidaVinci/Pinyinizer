@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const modeSwitch = $("modeSwitch");
   const englishRow = $("englishRow");
   const annotateShowEnglish = $("annotateShowEnglish");
+  const accentsRow = $("accentsRow");
+  const annotateAccentsOnly = $("annotateAccentsOnly");
 
   const pinyinSection = $("pinyinSection");
   const translateSection = $("translateSection");
@@ -22,6 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const pinyinScale = $("pinyinScale");
   const hanziScaleVal = $("hanziScaleVal");
   const pinyinScaleVal = $("pinyinScaleVal");
+  const pinyinScaleLabel = $("pinyinScaleLabel");
 
   const provider = $("provider");
   const providerDescription = $("providerDescription");
@@ -63,6 +66,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   reflectToggleUI(englishRow, annotateShowEnglish.checked);
   annotateShowEnglish.addEventListener("change", () =>
     reflectToggleUI(englishRow, annotateShowEnglish.checked));
+
+  annotateAccentsOnly.checked = !!settings.annotate?.accentsOnly;
+  reflectToggleUI(accentsRow, annotateAccentsOnly.checked);
+  reflectAccentLabel();
+  annotateAccentsOnly.addEventListener("change", () => {
+    reflectToggleUI(accentsRow, annotateAccentsOnly.checked);
+    reflectAccentLabel();
+  });
+
+  function reflectAccentLabel() {
+    pinyinScaleLabel.textContent = annotateAccentsOnly.checked ? "Accent scale" : "Pinyin scale";
+  }
 
   liveCaptionsEnabled.checked = !!settings.liveCaptions?.enabled;
   reflectToggleUI(liveCaptionsRow, liveCaptionsEnabled.checked);
@@ -154,6 +169,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       annotate: {
         ...(settings.annotate || {}),
         showEnglish: annotateShowEnglish.checked,
+        accentsOnly: annotateAccentsOnly.checked,
         hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
         pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2),
       },

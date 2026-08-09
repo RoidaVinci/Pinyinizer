@@ -33,6 +33,15 @@
     <section id="pinyinSection">
       <h2>Pinyin options</h2>
 
+      <div class="toggle-row" id="accentsRow">
+        <span class="toggle-label off">Pinyin</span>
+        <label class="switch">
+          <input id="annotateAccentsOnly" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label on">Accents only</span>
+      </div>
+
       <div class="toggle-row" id="englishRow">
         <span class="toggle-label off">Hide English</span>
         <label class="switch">
@@ -57,7 +66,7 @@
       </div>
 
       <div class="field">
-        <span>Pinyin scale</span>
+        <span id="pinyinScaleLabel">Pinyin scale</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
       </div>

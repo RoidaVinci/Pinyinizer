@@ -56,6 +56,16 @@
 
     <!-- Pinyin-only -->
     <section id="pinyinSection" hidden>
+      <!-- Full pinyin vs. tone marks only -->
+      <div class="toggle-row" id="accentsRow">
+        <span class="toggle-label off">Pinyin</span>
+        <label class="switch" aria-label="Show accents only instead of full pinyin">
+          <input id="annotateAccentsOnly" type="checkbox" role="switch" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label on">Accents only</span>
+      </div>
+
       <!-- Show English toggle -->
       <div class="toggle-row" id="englishRow">
         <span class="toggle-label off">Hide English</span>
@@ -72,7 +82,7 @@
         <small><code id="hanziScaleVal"></code></small>
       </label>
       <label class="stack" style="margin-bottom:12px;">
-        <span>Pinyin scale</span>
+        <span id="pinyinScaleLabel">Pinyin scale</span>
         <input id="pinyinScale" type="range" min="0.30" max="1.20" step="0.01" />
         <small><code id="pinyinScaleVal"></code></small>
       </label>

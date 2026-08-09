@@ -53,3 +53,44 @@ export function syllabifyOrCharLookup(chars, pyPhrase, charPinyinMap) {
   if (bySplit.length === chars.length) return bySplit;
   return chars.map(ch => charPinyinMap.get(ch) || "");
 }
+
+// ---- tone accents (accents-only mode) ----
+
+// Standalone (spacing) tone marks, indexed by tone number. The neutral tone
+// gets nothing at all — an empty rt keeps the character's baseline aligned
+// with its neighbours instead of nudging it around.
+export const TONE_MARKS = ["", "ˉ", "ˊ", "ˇ", "ˋ"]; // ˉ ˊ ˇ ˋ
+
+// Combining diacritics as produced by NFD decomposition of ā/á/ǎ/à (and their
+// ü variants, whose diaeresis we skip over).
+const COMBINING_TONES = {
+  "\u0304": 1, // macron
+  "\u0301": 2, // acute
+  "\u030C": 3, // caron
+  "\u0300": 4, // grave
+};
+
+// Tone number (1–4, or 0 for neutral/unknown) of a single pinyin syllable.
+// Accepts both marked ("hǎo") and numbered ("hao3") styles, since providers
+// differ and per-character lookups are passed through unmodified.
+export function toneOf(syllable) {
+  const s = String(syllable || "");
+  if (!s) return 0;
+
+  for (const ch of s.normalize("NFD")) {
+    const tone = COMBINING_TONES[ch];
+    if (tone) return tone;
+  }
+
+  const m = /([1-5])\s*$/.exec(s.trim());
+  if (m) {
+    const n = +m[1];
+    return n >= 1 && n <= 4 ? n : 0;
+  }
+  return 0;
+}
+
+// The mark to render under a character: "ˉ" | "ˊ" | "ˇ" | "ˋ" | "".
+export function toneMarkOf(syllable) {
+  return TONE_MARKS[toneOf(syllable)] || "";
+}
