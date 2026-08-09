@@ -295,15 +295,19 @@ export function ensurePinyinStyles() {
   /* The box is a pseudo-element sized to the mark's ink rather than a border
      on the span: these glyphs are spacing modifier letters whose em box is
      mostly empty below them, so a plain border would draw a tall rectangle
-     with the mark stranded at its top edge. */
+     with the mark stranded at its top edge. It is narrow and a touch taller
+     than wide — a box the width of the glyph's advance reads as a flat pill —
+     and its width is fixed rather than inherited from that advance, which
+     varies enough between fonts to change the box's proportions. */
   .ct-accents-only .ct-accent::before {
     content: "";
     position: absolute;
     box-sizing: border-box;
-    left: -0.18em;
-    right: -0.18em;
-    top: -0.02em;
-    height: 0.3em;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0.4em;
+    top: -0.06em;
+    height: 0.44em;
     border: 1px solid ${ACCENT_COLOR};
     border-radius: 0.12em;
     background: ${ACCENT_FILL};
