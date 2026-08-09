@@ -63,8 +63,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   reflectAccentLabel();
 
   // Pinyin scales
-  const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 1.2);
-  const sPinyin = clampNum(prev.annotate?.pinyinScale ?? 0.53, 0.3, 1.2);
+  const sHanzi = clampNum(prev.annotate?.hanziScale ?? 0.90, 0.3, 2.0);
+  const sPinyin = clampNum(prev.annotate?.pinyinScale ?? 0.53, 0.3, 2.0);
   hanziScale.value = sHanzi; hanziScaleVal.textContent = sHanzi.toFixed(2);
   pinyinScale.value = sPinyin; pinyinScaleVal.textContent = sPinyin.toFixed(2);
   hanziScale.addEventListener("input", () => hanziScaleVal.textContent = (+hanziScale.value).toFixed(2));
@@ -133,8 +133,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         ...(prev.annotate || {}),
         showEnglish: englishToggle.checked,
         accentsOnly: accentsToggle.checked,
-        hanziScale: clampNum(+hanziScale.value, 0.3, 1.2),
-        pinyinScale: clampNum(+pinyinScale.value, 0.3, 1.2),
+        hanziScale: clampNum(+hanziScale.value, 0.3, 2.0),
+        pinyinScale: clampNum(+pinyinScale.value, 0.3, 2.0),
       },
       enabled: enabled.checked,
       targetLangs,
